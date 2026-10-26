@@ -99,6 +99,52 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 	}
 }
 
+func TestShortenerRedirectToOriginalURL(t *testing.T) {
+	type requestParams struct {
+		id string
+	}
+	type expected struct {
+		statusCode     int
+		body           string
+		locationHeader string
+	}
+	tests := []struct {
+		name          string
+		requestParams requestParams
+		expected      expected
+	}{
+		{"empty id", requestParams{id: ""}, expected{statusCode: http.StatusBadRequest, body: "empty URL\n"}},
+		{
+			"unknown id",
+			requestParams{id: "unknown_id"},
+			expected{statusCode: http.StatusBadRequest, body: "unknown id\n"},
+		},
+		{
+			"known id",
+			requestParams{id: "known_id"},
+			expected{statusCode: http.StatusTemporaryRedirect, locationHeader: "https://practicum.yandex.ru/"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+			r.SetPathValue("id", test.requestParams.id)
+			var w = httptest.NewRecorder()
+
+			s := NewShortener()
+			s.urls["known_id"] = "https://practicum.yandex.ru/"
+			s.RedirectToOriginalURL(w, r)
+
+			result := w.Result()
+			defer result.Body.Close()
+
+			assert.Equal(t, test.expected.statusCode, result.StatusCode)
+			assert.Equal(t, test.expected.locationHeader, result.Header.Get("Location"))
+		})
+	}
+}
+
 type errorReader struct{}
 
 func (errorReader) Read([]byte) (int, error) {

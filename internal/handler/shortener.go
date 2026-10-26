@@ -69,10 +69,14 @@ func (s *Shortener) saveURL(originalURL string) string {
 
 func (s *Shortener) RedirectToOriginalURL(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "empty URL", http.StatusBadRequest)
+		return
+	}
 
 	originalURL, ok := s.getURL(id)
 	if !ok {
-		http.Error(w, "Unknown id", http.StatusBadRequest)
+		http.Error(w, "unknown id", http.StatusBadRequest)
 		return
 	}
 
