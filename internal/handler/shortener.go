@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/rand"
+	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -20,38 +21,50 @@ func NewShortener() *Shortener {
 }
 
 func (s *Shortener) CreateShortenURL(w http.ResponseWriter, r *http.Request) {
+	body, err := s.validateURL(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	id := s.saveURL(body)
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = w.Write([]byte("http://" + r.Host + "/" + id))
+}
+
+func (s *Shortener) validateURL(r *http.Request) (string, error) {
 	mediaType := r.Header.Get("Content-Type")
 	if mediaType != "text/plain" {
-		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
-		return
+		return "", errors.New("invalid Content-Type")
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return "", errors.New(err.Error())
 	}
 
-	id := s.saveURL(string(body))
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
-	_, err = w.Write([]byte("http://" + r.Host + "/" + id))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	stringBody := strings.TrimSpace(string(body))
+	if stringBody == "" {
+		return "", errors.New("empty URL")
 	}
+	return stringBody, nil
 }
 
 func (s *Shortener) saveURL(originalURL string) string {
-	hash := sha256.Sum256([]byte(originalURL))
-	id := hex.EncodeToString(hash[:])
-
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.urls[id] = originalURL
 
-	return id
+	for {
+		id := rand.Text()[:8]
+		if _, ok := s.urls[id]; ok {
+			continue
+		}
+
+		s.urls[id] = originalURL
+		return id
+	}
 }
 
 func (s *Shortener) RedirectToOriginalURL(w http.ResponseWriter, r *http.Request) {
