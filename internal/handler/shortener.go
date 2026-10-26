@@ -12,13 +12,15 @@ import (
 )
 
 type Shortener struct {
-	mutex sync.RWMutex
-	urls  map[string]string
+	mutex   sync.RWMutex
+	urls    map[string]string
+	baseURL string
 }
 
-func NewShortener() *Shortener {
+func NewShortener(baseURL string) *Shortener {
 	return &Shortener{
-		urls: make(map[string]string),
+		urls:    make(map[string]string),
+		baseURL: baseURL,
 	}
 }
 
@@ -31,7 +33,7 @@ func (s *Shortener) CreateShortenURL(c *gin.Context) {
 
 	id := s.saveURL(body)
 
-	c.Data(http.StatusCreated, "text/plain", []byte("http://"+c.Request.Host+"/"+id))
+	c.Data(http.StatusCreated, "text/plain", []byte(s.baseURL+"/"+id))
 }
 
 func (s *Shortener) validateURL(c *gin.Context) (string, error) {

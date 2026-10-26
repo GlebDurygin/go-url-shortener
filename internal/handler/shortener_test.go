@@ -81,7 +81,7 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 				w = recorder
 			}
 
-			s := NewShortener()
+			s := NewShortener("http://localhost:8080")
 			c, _ := gin.CreateTestContext(w)
 			c.Request = r
 			s.CreateShortenURL(c)
@@ -134,7 +134,7 @@ func TestShortenerRedirectToOriginalURL(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
 			var w = httptest.NewRecorder()
 
-			s := NewShortener()
+			s := NewShortener("http://localhost:8080")
 			s.urls["known_id"] = "https://practicum.yandex.ru/"
 			c, _ := gin.CreateTestContext(w)
 			c.Request = r
