@@ -1,0 +1,114 @@
+package handler
+
+import (
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestShortenerCreateShortenURL(t *testing.T) {
+	type requestParams struct {
+		contentType string
+		body        string
+		errorReader bool
+		errorWriter bool
+	}
+	type expected struct {
+		statusCode int
+		body       string
+	}
+	tests := []struct {
+		name          string
+		requestParams requestParams
+		expected      expected
+	}{
+		{
+			name:          "invalid content type",
+			requestParams: requestParams{contentType: "application/json"},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "invalid Content-Type\n"},
+		},
+		{
+			name:          "invalid body",
+			requestParams: requestParams{contentType: "text/plain", errorReader: true},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "read failed\n"},
+		},
+		{
+			name:          "empty URL",
+			requestParams: requestParams{contentType: "text/plain", body: ""},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "empty URL\n"},
+		},
+		{
+			name: "invalid writer",
+			requestParams: requestParams{
+				contentType: "text/plain",
+				body:        "https://practicum.yandex.ru/",
+				errorWriter: true,
+			},
+			expected: expected{statusCode: http.StatusCreated, body: ""},
+		},
+		{
+			name:          "valid URL",
+			requestParams: requestParams{contentType: "text/plain", body: "https://practicum.yandex.ru/"},
+			expected:      expected{statusCode: http.StatusCreated},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var reader io.Reader
+			if test.requestParams.errorReader {
+				reader = errorReader{}
+			} else {
+				reader = strings.NewReader(test.requestParams.body)
+			}
+			r := httptest.NewRequest(http.MethodPost, "http://localhost:8080/", reader)
+			r.Header.Set("Content-Type", test.requestParams.contentType)
+
+			var w http.ResponseWriter
+			var recorder = httptest.NewRecorder()
+			if test.requestParams.errorWriter {
+				w = &errorWriter{
+					ResponseRecorder: recorder,
+				}
+			} else {
+				w = recorder
+			}
+
+			s := NewShortener()
+			s.CreateShortenURL(w, r)
+
+			result := recorder.Result()
+			defer result.Body.Close()
+
+			assert.Equal(t, test.expected.statusCode, result.StatusCode)
+
+			if test.expected.body != "" {
+				resultBody, err := io.ReadAll(result.Body)
+				require.NoError(t, err)
+				assert.Equal(t, test.expected.body, string(resultBody))
+			} else {
+				assert.NotEmpty(t, result.Body)
+			}
+		})
+	}
+}
+
+type errorReader struct{}
+
+func (errorReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+type errorWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (w *errorWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
+}
