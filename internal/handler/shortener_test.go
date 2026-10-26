@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,17 +32,17 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 		{
 			name:          "invalid content type",
 			requestParams: requestParams{contentType: "application/json"},
-			expected:      expected{statusCode: http.StatusBadRequest, body: "invalid Content-Type\n"},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "invalid Content-Type"},
 		},
 		{
 			name:          "invalid body",
 			requestParams: requestParams{contentType: "text/plain", errorReader: true},
-			expected:      expected{statusCode: http.StatusBadRequest, body: "read failed\n"},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "read failed"},
 		},
 		{
 			name:          "empty URL",
 			requestParams: requestParams{contentType: "text/plain", body: ""},
-			expected:      expected{statusCode: http.StatusBadRequest, body: "empty URL\n"},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "empty URL"},
 		},
 		{
 			name: "invalid writer",
@@ -81,7 +82,9 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 			}
 
 			s := NewShortener()
-			s.CreateShortenURL(w, r)
+			c, _ := gin.CreateTestContext(w)
+			c.Request = r
+			s.CreateShortenURL(c)
 
 			result := recorder.Result()
 			defer result.Body.Close()
@@ -129,12 +132,15 @@ func TestShortenerRedirectToOriginalURL(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
-			r.SetPathValue("id", test.requestParams.id)
 			var w = httptest.NewRecorder()
 
 			s := NewShortener()
 			s.urls["known_id"] = "https://practicum.yandex.ru/"
-			s.RedirectToOriginalURL(w, r)
+			c, _ := gin.CreateTestContext(w)
+			c.Request = r
+			c.Params = gin.Params{{Key: "id", Value: test.requestParams.id}}
+			s.RedirectToOriginalURL(c)
+			c.Writer.WriteHeaderNow()
 
 			result := w.Result()
 			defer result.Body.Close()

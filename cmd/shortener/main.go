@@ -3,16 +3,18 @@ package main
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/GlebDurygin/go-url-shortener/internal/handler"
 )
 
 func main() {
-	mux := http.NewServeMux()
+	mux := gin.New()
 	shortenerHandler := handler.NewShortener()
-	mux.HandleFunc("POST /{$}", shortenerHandler.CreateShortenURL)
-	mux.HandleFunc("GET /{id}", shortenerHandler.RedirectToOriginalURL)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	mux.POST("/", shortenerHandler.CreateShortenURL)
+	mux.GET("/:id", shortenerHandler.RedirectToOriginalURL)
+	mux.NoRoute(func(c *gin.Context) {
+		c.String(http.StatusBadRequest, "Invalid request")
 	})
 
 	err := http.ListenAndServe(":8080", mux)

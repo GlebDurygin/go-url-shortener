@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Shortener struct {
@@ -20,27 +22,25 @@ func NewShortener() *Shortener {
 	}
 }
 
-func (s *Shortener) CreateShortenURL(w http.ResponseWriter, r *http.Request) {
-	body, err := s.validateURL(r)
+func (s *Shortener) CreateShortenURL(c *gin.Context) {
+	body, err := s.validateURL(c)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "%s", err.Error())
 		return
 	}
 
 	id := s.saveURL(body)
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
-	_, _ = w.Write([]byte("http://" + r.Host + "/" + id))
+	c.Data(http.StatusCreated, "text/plain", []byte("http://"+c.Request.Host+"/"+id))
 }
 
-func (s *Shortener) validateURL(r *http.Request) (string, error) {
-	mediaType := r.Header.Get("Content-Type")
+func (s *Shortener) validateURL(c *gin.Context) (string, error) {
+	mediaType := c.GetHeader("Content-Type")
 	if mediaType != "text/plain" {
 		return "", errors.New("invalid Content-Type")
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		return "", errors.New(err.Error())
 	}
@@ -67,21 +67,21 @@ func (s *Shortener) saveURL(originalURL string) string {
 	}
 }
 
-func (s *Shortener) RedirectToOriginalURL(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		http.Error(w, "empty URL", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "empty URL")
 		return
 	}
 
 	originalURL, ok := s.getURL(id)
 	if !ok {
-		http.Error(w, "unknown id", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "unknown id")
 		return
 	}
 
-	w.Header().Set("Location", originalURL)
-	w.WriteHeader(http.StatusTemporaryRedirect)
+	c.Header("Location", originalURL)
+	c.Status(http.StatusTemporaryRedirect)
 }
 
 func (s *Shortener) getURL(id string) (string, bool) {
