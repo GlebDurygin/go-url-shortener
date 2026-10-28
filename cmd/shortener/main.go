@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -12,21 +14,28 @@ import (
 )
 
 func main() {
-	cnf, err := config.Parse(os.Args[1:])
+	if err := run(); err != nil {
+		log.Print(err)
+	}
+}
+
+func run() error {
+	cfg, err := config.Parse(os.Args[1:])
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("parse config: %w", err)
 	}
 
 	mux := gin.New()
-	shortenerHandler := handler.NewShortener(cnf.BaseURL, storage.NewURLStorage())
+	shortenerHandler := handler.NewShortener(cfg.BaseURL, storage.NewURLStorage())
 	mux.POST("/", shortenerHandler.CreateShortenURL)
 	mux.GET("/:id", shortenerHandler.RedirectToOriginalURL)
 	mux.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Invalid request")
 	})
 
-	err = http.ListenAndServe(cnf.ServerAddress, mux)
+	err = http.ListenAndServe(cfg.ServerAddress, mux)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("listen and serve HTTP: %w", err)
 	}
+	return nil
 }
