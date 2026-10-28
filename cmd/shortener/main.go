@@ -8,6 +8,7 @@ import (
 
 	"github.com/GlebDurygin/go-url-shortener/internal/config"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage"
 )
 
 func main() {
@@ -17,7 +18,7 @@ func main() {
 	}
 
 	mux := gin.New()
-	shortenerHandler := handler.NewShortener(cnf.BaseURL)
+	shortenerHandler := handler.NewShortener(cnf.BaseURL, storage.NewURLStorage())
 	mux.POST("/", shortenerHandler.CreateShortenURL)
 	mux.GET("/:id", shortenerHandler.RedirectToOriginalURL)
 	mux.NoRoute(func(c *gin.Context) {

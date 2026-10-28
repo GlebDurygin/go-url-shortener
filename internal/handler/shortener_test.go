@@ -81,7 +81,8 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 				w = recorder
 			}
 
-			s := NewShortener("http://localhost:8080")
+			repository := &stubURLRepository{}
+			s := NewShortener("http://localhost:8080", repository)
 			c, _ := gin.CreateTestContext(w)
 			c.Request = r
 			s.CreateShortenURL(c)
@@ -134,8 +135,7 @@ func TestShortenerRedirectToOriginalURL(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
 			var w = httptest.NewRecorder()
 
-			s := NewShortener("http://localhost:8080")
-			s.urls["known_id"] = "https://practicum.yandex.ru/"
+			s := NewShortener("http://localhost:8080", &stubURLRepository{})
 			c, _ := gin.CreateTestContext(w)
 			c.Request = r
 			c.Params = gin.Params{{Key: "id", Value: test.requestParams.id}}
@@ -163,4 +163,17 @@ type errorWriter struct {
 
 func (w *errorWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write failed")
+}
+
+type stubURLRepository struct{}
+
+func (s *stubURLRepository) Save(string) string {
+	return "known_id"
+}
+
+func (s *stubURLRepository) FindById(id string) (string, bool) {
+	if id == "known_id" {
+		return "https://practicum.yandex.ru/", true
+	}
+	return "", false
 }
