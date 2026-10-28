@@ -28,7 +28,7 @@ func (m *URLStorage) Save(originalURL string) string {
 	}
 }
 
-func (m *URLStorage) FindById(id string) (string, bool) {
+func (m *URLStorage) FindByID(id string) (string, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 

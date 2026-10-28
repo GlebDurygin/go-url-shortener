@@ -12,7 +12,7 @@ func TestURLStorageSaveAndFindById(t *testing.T) {
 	url := "https://practicum.yandex.ru/"
 
 	id := storage.Save(url)
-	actual, ok := storage.FindById(id)
+	actual, ok := storage.FindByID(id)
 
 	require.True(t, ok)
 	assert.Equal(t, url, actual)
@@ -21,7 +21,7 @@ func TestURLStorageSaveAndFindById(t *testing.T) {
 func TestURLStorageFindById(t *testing.T) {
 	storage := NewURLStorage()
 
-	actual, ok := storage.FindById("unknown_id")
+	actual, ok := storage.FindByID("unknown_id")
 
 	require.False(t, ok)
 	assert.Empty(t, actual)

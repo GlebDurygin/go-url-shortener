@@ -42,7 +42,7 @@ func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
 		return
 	}
 
-	originalURL, ok := s.repository.FindById(id)
+	originalURL, ok := s.repository.FindByID(id)
 	if !ok {
 		c.String(http.StatusBadRequest, "unknown id")
 		return

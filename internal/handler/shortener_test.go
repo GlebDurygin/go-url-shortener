@@ -171,7 +171,7 @@ func (s *stubURLRepository) Save(string) string {
 	return "known_id"
 }
 
-func (s *stubURLRepository) FindById(id string) (string, bool) {
+func (s *stubURLRepository) FindByID(id string) (string, bool) {
 	if id == "known_id" {
 		return "https://practicum.yandex.ru/", true
 	}
