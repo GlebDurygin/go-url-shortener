@@ -23,6 +23,7 @@ type compressReader struct {
 
 func Gzip() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Writer.Header().Add("Vary", "Accept-Encoding")
 		if strings.EqualFold(strings.TrimSpace(c.GetHeader("Content-Encoding")), "gzip") {
 			reader, err := newCompressReader(c.Request.Body)
 			if err != nil {
