@@ -24,7 +24,7 @@ func NewURLFileStorage(path string) (*URLFileStorage, error) {
 			return nil, err
 		}
 
-		if err := m.persist([]model.UrlEntity{}); err != nil {
+		if err := m.persist([]model.URLEntity{}); err != nil {
 			return nil, err
 		}
 	}
@@ -53,7 +53,7 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 			continue
 		}
 
-		records = append(records, model.UrlEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
+		records = append(records, model.URLEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
 		if err := m.persist(records); err != nil {
 			return "", err
 		}
@@ -77,7 +77,7 @@ func (m *URLFileStorage) FindByID(id string) (string, bool) {
 	return "", false
 }
 
-func (m *URLFileStorage) persist(records []model.UrlEntity) error {
+func (m *URLFileStorage) persist(records []model.URLEntity) error {
 	data, err := json.Marshal(records)
 	if err != nil {
 		return fmt.Errorf("encode URL storage: %w", err)
@@ -88,12 +88,12 @@ func (m *URLFileStorage) persist(records []model.UrlEntity) error {
 	return nil
 }
 
-func (m *URLFileStorage) read() ([]model.UrlEntity, error) {
+func (m *URLFileStorage) read() ([]model.URLEntity, error) {
 	data, err := os.ReadFile(m.filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read URL storage: %w", err)
 	}
-	var records []model.UrlEntity
+	var records []model.URLEntity
 	if len(bytes.TrimSpace(data)) != 0 {
 		if err := json.Unmarshal(data, &records); err != nil {
 			return nil, fmt.Errorf("decode URL storage: %w", err)
