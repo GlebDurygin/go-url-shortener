@@ -7,15 +7,23 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/config"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler"
+	"github.com/GlebDurygin/go-url-shortener/internal/logger"
+	"github.com/GlebDurygin/go-url-shortener/internal/router"
 	"github.com/GlebDurygin/go-url-shortener/internal/storage"
 )
 
 func main() {
+	if err := logger.Initialize("info"); err != nil {
+		log.Printf("failed to initialize logger: %v", err)
+		return
+	}
+
 	if err := run(); err != nil {
-		log.Print(err)
+		logger.Log.Error("server stopped", zap.Error(err))
 	}
 }
 
@@ -25,15 +33,12 @@ func run() error {
 		return fmt.Errorf("parse config: %w", err)
 	}
 
-	mux := gin.New()
+	engine := gin.New()
+	engine.Use(logger.RequestLogger())
 	shortenerHandler := handler.NewShortener(cfg.BaseURL, storage.NewURLStorage())
-	mux.POST("/", shortenerHandler.CreateShortenURL)
-	mux.GET("/:id", shortenerHandler.RedirectToOriginalURL)
-	mux.NoRoute(func(c *gin.Context) {
-		c.String(http.StatusBadRequest, "Invalid request")
-	})
+	router.RegisterRoutes(engine, shortenerHandler)
 
-	err = http.ListenAndServe(cfg.ServerAddress, mux)
+	err = http.ListenAndServe(cfg.ServerAddress, engine)
 	if err != nil {
 		return fmt.Errorf("listen and serve HTTP: %w", err)
 	}
