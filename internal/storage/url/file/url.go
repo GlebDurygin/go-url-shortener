@@ -8,13 +8,17 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
-	"github.com/GlebDurygin/go-url-shortener/internal/model"
 )
 
 type URLFileStorage struct {
 	mutex    sync.Mutex
 	filePath string
+}
+
+type urlEntity struct {
+	UUID        string `json:"uuid"`
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
 }
 
 func NewURLFileStorage(path string) (*URLFileStorage, error) {
@@ -24,7 +28,7 @@ func NewURLFileStorage(path string) (*URLFileStorage, error) {
 			return nil, err
 		}
 
-		if err := m.persist([]model.URLEntity{}); err != nil {
+		if err := m.persist([]urlEntity{}); err != nil {
 			return nil, err
 		}
 	}
@@ -35,7 +39,7 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	records, err := m.read()
+	entities, err := m.read()
 	if err != nil {
 		return "", err
 	}
@@ -43,8 +47,8 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 	for {
 		id := rand.Text()[:8]
 		duplicate := false
-		for _, record := range records {
-			if record.ShortURL == id {
+		for _, entity := range entities {
+			if entity.ShortURL == id {
 				duplicate = true
 				break
 			}
@@ -53,8 +57,8 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 			continue
 		}
 
-		records = append(records, model.URLEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
-		if err := m.persist(records); err != nil {
+		entities = append(entities, urlEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
+		if err := m.persist(entities); err != nil {
 			return "", err
 		}
 		return id, nil
@@ -65,19 +69,19 @@ func (m *URLFileStorage) FindByID(id string) (string, bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	records, err := m.read()
+	entities, err := m.read()
 	if err != nil {
 		return "", false
 	}
-	for _, record := range records {
-		if record.ShortURL == id {
-			return record.OriginalURL, true
+	for _, entity := range entities {
+		if entity.ShortURL == id {
+			return entity.OriginalURL, true
 		}
 	}
 	return "", false
 }
 
-func (m *URLFileStorage) persist(records []model.URLEntity) error {
+func (m *URLFileStorage) persist(records []urlEntity) error {
 	data, err := json.Marshal(records)
 	if err != nil {
 		return fmt.Errorf("encode URL storage: %w", err)
@@ -88,16 +92,16 @@ func (m *URLFileStorage) persist(records []model.URLEntity) error {
 	return nil
 }
 
-func (m *URLFileStorage) read() ([]model.URLEntity, error) {
+func (m *URLFileStorage) read() ([]urlEntity, error) {
 	data, err := os.ReadFile(m.filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read URL storage: %w", err)
 	}
-	var records []model.URLEntity
+	var entities []urlEntity
 	if len(bytes.TrimSpace(data)) != 0 {
-		if err := json.Unmarshal(data, &records); err != nil {
+		if err := json.Unmarshal(data, &entities); err != nil {
 			return nil, fmt.Errorf("decode URL storage: %w", err)
 		}
 	}
-	return records, nil
+	return entities, nil
 }
