@@ -1,4 +1,4 @@
-package handler
+package shortener
 
 import (
 	"bytes"
@@ -159,10 +159,13 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 		expected      expected
 	}{
 		{
-			name:          "save error",
-			requestParams: requestParams{contentType: "application/json", body: `{"url":"https://practicum.yandex.ru/"}`},
-			saveError:     errors.New("save failed"),
-			expected:      expected{statusCode: http.StatusInternalServerError, body: "save failed"},
+			name: "save error",
+			requestParams: requestParams{
+				contentType: "application/json",
+				body:        `{"url":"https://practicum.yandex.ru/"}`,
+			},
+			saveError: errors.New("save failed"),
+			expected:  expected{statusCode: http.StatusInternalServerError, body: "save failed"},
 		},
 		{
 			name:          "invalid content type",

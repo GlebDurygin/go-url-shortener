@@ -1,4 +1,4 @@
-package handler
+package shortener
 
 import (
 	"errors"
@@ -6,12 +6,11 @@ import (
 	"net/http"
 	"strings"
 
+	dto "github.com/GlebDurygin/go-url-shortener/internal/dto/url"
+	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/mailru/easyjson"
-
-	"github.com/GlebDurygin/go-url-shortener/internal/dto"
-	"github.com/GlebDurygin/go-url-shortener/internal/repository"
 )
 
 type Shortener struct {

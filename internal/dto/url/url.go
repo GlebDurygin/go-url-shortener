@@ -1,4 +1,4 @@
-package dto
+package url
 
 //go:generate easyjson -all url.go
 type CreateURLRequest struct {

@@ -1,4 +1,4 @@
-package repository
+package url
 
 type URLRepository interface {
 	Save(url string) (string, error)
