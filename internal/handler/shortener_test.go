@@ -103,6 +103,125 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 	}
 }
 
+func TestShortenerCreateShortenURLJson(t *testing.T) {
+	type requestParams struct {
+		contentType string
+		body        string
+		errorReader bool
+		errorWriter bool
+	}
+	type expected struct {
+		statusCode int
+		body       string
+	}
+	tests := []struct {
+		name          string
+		requestParams requestParams
+		expected      expected
+	}{
+		{
+			name:          "invalid content type",
+			requestParams: requestParams{contentType: "text/plain"},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "invalid Content-Type"},
+		},
+		{
+			name:          "invalid body",
+			requestParams: requestParams{contentType: "application/json", errorReader: true},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "read failed"},
+		},
+		{
+			name:          "empty URL",
+			requestParams: requestParams{contentType: "application/json", body: `{"url":""}`},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "required"},
+		},
+		{
+			name:          "missing URL",
+			requestParams: requestParams{contentType: "application/json", body: `{}`},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "required"},
+		},
+		{
+			name:          "null URL",
+			requestParams: requestParams{contentType: "application/json", body: `{"url":null}`},
+			expected:      expected{statusCode: http.StatusBadRequest, body: "required"},
+		},
+		{
+			name:          "non-string URL",
+			requestParams: requestParams{contentType: "application/json", body: `{"url":42}`},
+			expected:      expected{statusCode: http.StatusBadRequest, body: ""},
+		},
+		{
+			name: "invalid writer",
+			requestParams: requestParams{
+				contentType: "application/json",
+				body:        `{"url":"https://practicum.yandex.ru/"}`,
+				errorWriter: true,
+			},
+			expected: expected{statusCode: http.StatusCreated, body: ""},
+		},
+		{
+			name: "valid URL",
+			requestParams: requestParams{
+				contentType: "application/json",
+				body:        `{"url":"https://practicum.yandex.ru/"}`,
+			},
+			expected: expected{
+				statusCode: http.StatusCreated,
+				body:       `{"result":"http://localhost:8080/known_id"}`,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var reader io.Reader
+			if test.requestParams.errorReader {
+				reader = errorReader{}
+			} else {
+				reader = strings.NewReader(test.requestParams.body)
+			}
+			r := httptest.NewRequest(http.MethodPost, "http://localhost:8080/api/shorten", reader)
+			r.Header.Set("Content-Type", test.requestParams.contentType)
+
+			var w http.ResponseWriter
+			var recorder = httptest.NewRecorder()
+			if test.requestParams.errorWriter {
+				w = &errorWriter{
+					ResponseRecorder: recorder,
+				}
+			} else {
+				w = recorder
+			}
+
+			repository := &stubURLRepository{}
+			s := NewShortener("http://localhost:8080", repository)
+			c, _ := gin.CreateTestContext(w)
+			c.Request = r
+			s.CreateShortenURLJson(c)
+
+			result := recorder.Result()
+			defer result.Body.Close()
+
+			assert.Equal(t, test.expected.statusCode, result.StatusCode)
+
+			resultBody, err := io.ReadAll(result.Body)
+			require.NoError(t, err)
+			if test.expected.statusCode == http.StatusCreated {
+				assert.Equal(t, "application/json", result.Header.Get("Content-Type"))
+				if test.requestParams.errorWriter {
+					assert.Empty(t, resultBody)
+				} else {
+					assert.JSONEq(t, test.expected.body, string(resultBody))
+				}
+			} else {
+				assert.NotEmpty(t, resultBody)
+				if test.expected.body != "" {
+					assert.Contains(t, string(resultBody), test.expected.body)
+				}
+			}
+		})
+	}
+}
+
 func TestShortenerRedirectToOriginalURL(t *testing.T) {
 	type requestParams struct {
 		id string

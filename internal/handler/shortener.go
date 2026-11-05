@@ -7,7 +7,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/mailru/easyjson"
 
+	"github.com/GlebDurygin/go-url-shortener/internal/dto"
 	"github.com/GlebDurygin/go-url-shortener/internal/repository"
 )
 
@@ -33,6 +36,24 @@ func (s *Shortener) CreateShortenURL(c *gin.Context) {
 	id := s.repository.Save(body)
 
 	c.Data(http.StatusCreated, "text/plain", []byte(s.baseURL+"/"+id))
+}
+
+func (s *Shortener) CreateShortenURLJson(c *gin.Context) {
+	body, err := s.validateURLJson(c)
+	if err != nil {
+		c.String(http.StatusBadRequest, "%s", err.Error())
+		return
+	}
+
+	id := s.repository.Save(body)
+
+	response, err := easyjson.Marshal(dto.CreateURLResponse{Result: s.baseURL + "/" + id})
+	if err != nil {
+		c.String(http.StatusInternalServerError, "%s", err.Error())
+		return
+	}
+
+	c.Data(http.StatusCreated, "application/json", response)
 }
 
 func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
@@ -68,4 +89,26 @@ func (s *Shortener) validateURL(c *gin.Context) (string, error) {
 		return "", errors.New("empty URL")
 	}
 	return stringBody, nil
+}
+
+func (s *Shortener) validateURLJson(c *gin.Context) (string, error) {
+	mediaType := c.GetHeader("Content-Type")
+	if mediaType != "application/json" {
+		return "", errors.New("invalid Content-Type")
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+
+	var request dto.CreateURLRequest
+	if err := easyjson.Unmarshal(body, &request); err != nil {
+		return "", err
+	}
+
+	if err := binding.Validator.ValidateStruct(&request); err != nil {
+		return "", err
+	}
+	return request.URL, nil
 }
