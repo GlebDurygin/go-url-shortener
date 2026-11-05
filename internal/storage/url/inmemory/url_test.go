@@ -1,4 +1,4 @@
-package storage
+package inmemory
 
 import (
 	"testing"
@@ -7,19 +7,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestURLStorageSaveAndFindById(t *testing.T) {
-	storage := NewURLStorage()
+func TestURLInMemoryStorageSaveAndFindById(t *testing.T) {
+	storage := NewURLInMemoryStorage()
 	url := "https://practicum.yandex.ru/"
 
-	id := storage.Save(url)
+	id, err := storage.Save(url)
+	require.NoError(t, err)
 	actual, ok := storage.FindByID(id)
 
 	require.True(t, ok)
 	assert.Equal(t, url, actual)
 }
 
-func TestURLStorageFindById(t *testing.T) {
-	storage := NewURLStorage()
+func TestURLInMemoryStorageFindById(t *testing.T) {
+	storage := NewURLInMemoryStorage()
 
 	actual, ok := storage.FindByID("unknown_id")
 

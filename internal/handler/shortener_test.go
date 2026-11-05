@@ -33,8 +33,15 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 	tests := []struct {
 		name          string
 		requestParams requestParams
+		saveError     error
 		expected      expected
 	}{
+		{
+			name:          "save error",
+			requestParams: requestParams{contentType: "text/plain", body: `https://practicum.yandex.ru/`},
+			saveError:     errors.New("save failed"),
+			expected:      expected{statusCode: http.StatusInternalServerError, body: "save failed"},
+		},
 		{
 			name:          "invalid content type",
 			requestParams: requestParams{contentType: "application/json"},
@@ -109,7 +116,7 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 				w = recorder
 			}
 
-			repository := &stubURLRepository{}
+			repository := &stubURLRepository{err: test.saveError}
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
@@ -148,8 +155,15 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 	tests := []struct {
 		name          string
 		requestParams requestParams
+		saveError     error
 		expected      expected
 	}{
+		{
+			name:          "save error",
+			requestParams: requestParams{contentType: "application/json", body: `{"url":"https://practicum.yandex.ru/"}`},
+			saveError:     errors.New("save failed"),
+			expected:      expected{statusCode: http.StatusInternalServerError, body: "save failed"},
+		},
 		{
 			name:          "invalid content type",
 			requestParams: requestParams{contentType: "text/plain"},
@@ -260,7 +274,7 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 				w = recorder
 			}
 
-			repository := &stubURLRepository{}
+			repository := &stubURLRepository{err: test.saveError}
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
@@ -364,10 +378,12 @@ func (w *errorWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write failed")
 }
 
-type stubURLRepository struct{}
+type stubURLRepository struct {
+	err error
+}
 
-func (s *stubURLRepository) Save(string) string {
-	return "known_id"
+func (s *stubURLRepository) Save(string) (string, error) {
+	return "known_id", s.err
 }
 
 func (s *stubURLRepository) FindByID(id string) (string, bool) {

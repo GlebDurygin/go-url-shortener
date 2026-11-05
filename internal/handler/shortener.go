@@ -33,7 +33,11 @@ func (s *Shortener) CreateShortenURL(c *gin.Context) {
 		return
 	}
 
-	id := s.repository.Save(body)
+	id, err := s.repository.Save(body)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "%s", err.Error())
+		return
+	}
 
 	c.Data(http.StatusCreated, "text/plain", []byte(s.baseURL+"/"+id))
 }
@@ -45,7 +49,11 @@ func (s *Shortener) CreateShortenURLJson(c *gin.Context) {
 		return
 	}
 
-	id := s.repository.Save(body)
+	id, err := s.repository.Save(body)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "%s", err.Error())
+		return
+	}
 
 	response, err := easyjson.Marshal(dto.CreateURLResponse{Result: s.baseURL + "/" + id})
 	if err != nil {

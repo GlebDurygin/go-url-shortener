@@ -8,13 +8,15 @@ import (
 
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/file"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/inmemory"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/config"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler"
+	"github.com/GlebDurygin/go-url-shortener/internal/repository"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
-	"github.com/GlebDurygin/go-url-shortener/internal/storage"
 )
 
 func main() {
@@ -34,10 +36,12 @@ func run() error {
 		return fmt.Errorf("parse config: %w", err)
 	}
 
+	urlStorage := newURLStorage(cfg.FileStoragePath)
+
 	engine := gin.New()
 	engine.Use(logger.RequestLogger())
 	engine.Use(compress.Gzip())
-	shortenerHandler := handler.NewShortener(cfg.BaseURL, storage.NewURLStorage())
+	shortenerHandler := handler.NewShortener(cfg.BaseURL, urlStorage)
 	router.RegisterRoutes(engine, shortenerHandler)
 
 	err = http.ListenAndServe(cfg.ServerAddress, engine)
@@ -45,4 +49,13 @@ func run() error {
 		return fmt.Errorf("listen and serve HTTP: %w", err)
 	}
 	return nil
+}
+
+func newURLStorage(filePath string) repository.URLRepository {
+	fileStorage, err := file.NewURLFileStorage(filePath)
+	if err != nil {
+		logger.Log.Warn("failed to initialize file storage, using in-memory storage", zap.Error(err))
+		return inmemory.NewURLInMemoryStorage()
+	}
+	return fileStorage
 }

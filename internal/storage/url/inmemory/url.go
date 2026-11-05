@@ -1,20 +1,20 @@
-package storage
+package inmemory
 
 import (
 	"crypto/rand"
 	"sync"
 )
 
-type URLStorage struct {
+type URLInMemoryStorage struct {
 	mutex sync.RWMutex
 	urls  map[string]string
 }
 
-func NewURLStorage() *URLStorage {
-	return &URLStorage{urls: make(map[string]string)}
+func NewURLInMemoryStorage() *URLInMemoryStorage {
+	return &URLInMemoryStorage{urls: make(map[string]string)}
 }
 
-func (m *URLStorage) Save(originalURL string) string {
+func (m *URLInMemoryStorage) Save(originalURL string) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -24,11 +24,11 @@ func (m *URLStorage) Save(originalURL string) string {
 			continue
 		}
 		m.urls[id] = originalURL
-		return id
+		return id, nil
 	}
 }
 
-func (m *URLStorage) FindByID(id string) (string, bool) {
+func (m *URLInMemoryStorage) FindByID(id string) (string, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
