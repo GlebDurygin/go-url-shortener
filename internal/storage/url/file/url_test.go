@@ -11,9 +11,9 @@ import (
 
 func TestURLFileStorageSaveAndFindById(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "urls.json")
-	require.NoError(t, os.WriteFile(path, nil, 0600))
 	storage, err := NewURLFileStorage(path)
 	require.NoError(t, err)
+	require.FileExists(t, path)
 	url := "https://practicum.yandex.ru/"
 
 	id, err := storage.Save(url)

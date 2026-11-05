@@ -23,6 +23,10 @@ func NewURLFileStorage(path string) (*URLFileStorage, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
+
+		if err := m.persist([]model.UrlEntity{}); err != nil {
+			return nil, err
+		}
 	}
 	return m, nil
 }
