@@ -4,11 +4,15 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/GlebDurygin/go-url-shortener/internal/handler"
 )
 
-func RegisterRoutes(engine *gin.Engine, shortenerHandler *handler.Shortener) {
+type ShortenerHandler interface {
+	CreateShortenURL(*gin.Context)
+	CreateShortenURLJson(*gin.Context)
+	RedirectToOriginalURL(*gin.Context)
+}
+
+func RegisterRoutes(engine *gin.Engine, shortenerHandler ShortenerHandler) {
 	engine.POST("/", shortenerHandler.CreateShortenURL)
 	engine.POST("/api/shorten", shortenerHandler.CreateShortenURLJson)
 	engine.GET("/:id", shortenerHandler.RedirectToOriginalURL)

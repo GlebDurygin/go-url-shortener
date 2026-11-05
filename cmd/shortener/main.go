@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
+	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/config"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler"
-	"github.com/GlebDurygin/go-url-shortener/internal/logger"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
 	"github.com/GlebDurygin/go-url-shortener/internal/storage"
 )
@@ -35,6 +36,7 @@ func run() error {
 
 	engine := gin.New()
 	engine.Use(logger.RequestLogger())
+	engine.Use(compress.Gzip())
 	shortenerHandler := handler.NewShortener(cfg.BaseURL, storage.NewURLStorage())
 	router.RegisterRoutes(engine, shortenerHandler)
 
