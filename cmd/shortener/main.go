@@ -11,7 +11,6 @@ import (
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
 	"github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/file"
-	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/inmemory"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
@@ -36,7 +35,10 @@ func run() error {
 		return fmt.Errorf("parse config: %w", err)
 	}
 
-	urlStorage := newURLStorage(cfg.FileStoragePath)
+	urlStorage, err := newURLStorage(cfg.FileStoragePath)
+	if err != nil {
+		return err
+	}
 
 	engine := gin.New()
 	engine.Use(logger.RequestLogger())
@@ -51,11 +53,10 @@ func run() error {
 	return nil
 }
 
-func newURLStorage(filePath string) url.URLRepository {
+func newURLStorage(filePath string) (url.URLRepository, error) {
 	fileStorage, err := file.NewURLFileStorage(filePath)
 	if err != nil {
-		logger.Log.Warn("failed to initialize file storage, using in-memory storage", zap.Error(err))
-		return inmemory.NewURLInMemoryStorage()
+		return nil, fmt.Errorf("initialize file storage %q: %w", filePath, err)
 	}
-	return fileStorage
+	return fileStorage, nil
 }
