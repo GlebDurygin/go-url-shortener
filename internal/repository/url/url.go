@@ -1,7 +1,7 @@
-package repository
+package url
 
 type URLRepository interface {
-	Save(url string) string
+	Save(url string) (string, error)
 
 	FindByID(id string) (string, bool)
 }
