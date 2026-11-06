@@ -36,13 +36,13 @@ func TestURLFileStorageFindById(t *testing.T) {
 	assert.Empty(t, actual)
 }
 
-func TestURLFileStorageFindByIdReadsFile(t *testing.T) {
+func TestURLFileStorageFindByIdUsesMemory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "urls.json")
-	require.NoError(t, os.WriteFile(path, nil, 0600))
-	storage, err := NewURLFileStorage(path)
-	require.NoError(t, err)
 	data := []byte(`[{"uuid":"external","short_url":"known_id","original_url":"https://practicum.yandex.ru/"}]`)
 	require.NoError(t, os.WriteFile(path, data, 0600))
+	storage, err := NewURLFileStorage(path)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, []byte("invalid"), 0600))
 
 	actual, ok := storage.FindByID("known_id")
 
@@ -54,15 +54,14 @@ func TestURLFileStorageSaveError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "urls.json")
 	storage, err := NewURLFileStorage(path)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, []byte("invalid"), 0600))
+	require.NoError(t, os.Rename(path, path+".backup"))
+	require.NoError(t, os.Mkdir(path, 0700))
 
 	id, err := storage.Save("https://practicum.yandex.ru/")
 
 	require.Error(t, err)
 	assert.Empty(t, id)
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, "invalid", string(data))
+	assert.Empty(t, storage.urls)
 }
 
 func TestURLFileStorageInvalidFile(t *testing.T) {

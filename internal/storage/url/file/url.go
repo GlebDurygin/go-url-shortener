@@ -1,18 +1,19 @@
 package file
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 )
 
 type URLFileStorage struct {
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
 	filePath string
+	urls     map[string]string
 }
 
 type urlEntity struct {
@@ -22,15 +23,14 @@ type urlEntity struct {
 }
 
 func NewURLFileStorage(path string) (*URLFileStorage, error) {
-	m := &URLFileStorage{filePath: path}
-	if _, err := m.read(); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
+	m := &URLFileStorage{filePath: path, urls: make(map[string]string)}
+	entities, err := m.read()
+	if err != nil {
+		return nil, err
+	}
 
-		if err := m.persist([]urlEntity{}); err != nil {
-			return nil, err
-		}
+	for _, entity := range entities {
+		m.urls[entity.ShortURL] = entity.OriginalURL
 	}
 	return m, nil
 }
@@ -39,69 +39,58 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	entities, err := m.read()
-	if err != nil {
-		return "", err
-	}
-
 	for {
 		id := rand.Text()[:8]
-		duplicate := false
-		for _, entity := range entities {
-			if entity.ShortURL == id {
-				duplicate = true
-				break
-			}
-		}
-		if duplicate {
+		if _, exists := m.urls[id]; exists {
 			continue
 		}
 
-		entities = append(entities, urlEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
-		if err := m.persist(entities); err != nil {
+		if err := m.persist([]urlEntity{{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL}}); err != nil {
 			return "", err
 		}
+		m.urls[id] = originalURL
 		return id, nil
 	}
 }
 
 func (m *URLFileStorage) FindByID(id string) (string, bool) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 
-	entities, err := m.read()
-	if err != nil {
-		return "", false
-	}
-	for _, entity := range entities {
-		if entity.ShortURL == id {
-			return entity.OriginalURL, true
-		}
-	}
-	return "", false
+	originalURL, ok := m.urls[id]
+	return originalURL, ok
 }
 
 func (m *URLFileStorage) persist(records []urlEntity) error {
-	data, err := json.Marshal(records)
+	f, err := os.OpenFile(m.filePath, os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		return fmt.Errorf("encode URL storage: %w", err)
+		return fmt.Errorf("open URL storage for append: %w", err)
 	}
-	if err := os.WriteFile(m.filePath, data, 0666); err != nil {
+	defer f.Close()
+
+	if err := json.NewEncoder(f).Encode(records); err != nil {
 		return fmt.Errorf("write URL storage: %w", err)
 	}
 	return nil
 }
 
 func (m *URLFileStorage) read() ([]urlEntity, error) {
-	data, err := os.ReadFile(m.filePath)
+	f, err := os.OpenFile(m.filePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		return nil, fmt.Errorf("read URL storage: %w", err)
+		return nil, fmt.Errorf("open URL storage: %w", err)
 	}
+	defer f.Close()
+
 	var entities []urlEntity
-	if len(bytes.TrimSpace(data)) != 0 {
-		if err := json.Unmarshal(data, &entities); err != nil {
+	decoder := json.NewDecoder(f)
+	for {
+		var records []urlEntity
+		if err := decoder.Decode(&records); err != nil {
+			if errors.Is(err, io.EOF) {
+				return entities, nil
+			}
 			return nil, fmt.Errorf("decode URL storage: %w", err)
 		}
+		entities = append(entities, records...)
 	}
-	return entities, nil
 }
