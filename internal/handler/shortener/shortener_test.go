@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
 
@@ -120,7 +121,7 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
-			router.RegisterRoutes(engine, s)
+			router.RegisterRoutes(engine, s, healthcheck.NewHealthCheck(nil))
 			engine.ServeHTTP(w, r)
 
 			result := recorder.Result()
@@ -281,7 +282,7 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
-			router.RegisterRoutes(engine, s)
+			router.RegisterRoutes(engine, s, healthcheck.NewHealthCheck(nil))
 			engine.ServeHTTP(w, r)
 
 			result := recorder.Result()
