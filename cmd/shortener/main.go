@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/shortener"
@@ -13,6 +15,9 @@ import (
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
 	"github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/file"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/inmemory"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/postgres"
+	"github.com/GlebDurygin/go-url-shortener/migrations"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
@@ -38,18 +43,17 @@ func run() error {
 		return fmt.Errorf("parse config: %w", err)
 	}
 
-	urlStorage, err := newURLStorage(cfg.FileStoragePath)
+	database, err := newDatabase(cfg.DatabaseDSN)
 	if err != nil {
 		return err
 	}
-
-	var database *sql.DB
-	if cfg.DatabaseDSN != "" {
-		database, err = sql.Open("pgx", cfg.DatabaseDSN)
-		if err != nil {
-			return fmt.Errorf("initialize database: invalid PostgreSQL connection configuration")
-		}
+	if database != nil {
 		defer database.Close()
+	}
+
+	urlStorage, err := newURLStorage(cfg.FileStoragePath, database)
+	if err != nil {
+		return err
 	}
 
 	engine := gin.New()
@@ -65,10 +69,39 @@ func run() error {
 	return nil
 }
 
-func newURLStorage(filePath string) (url.URLRepository, error) {
+func newURLStorage(filePath string, database *sql.DB) (url.URLRepository, error) {
+	if database != nil {
+		return postgres.NewURLPostgresStorage(database), nil
+	}
+	if filePath == "" {
+		return inmemory.NewURLInMemoryStorage(), nil
+	}
 	fileStorage, err := file.NewURLFileStorage(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("initialize file storage %q: %w", filePath, err)
 	}
 	return fileStorage, nil
+}
+
+func newDatabase(dsn string) (*sql.DB, error) {
+	if dsn == "" {
+		return nil, nil
+	}
+
+	database, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PostgreSQL connection url")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := database.PingContext(ctx); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	if err := migrations.Up(ctx, database); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("migrate database: %w", err)
+	}
+	return database, nil
 }

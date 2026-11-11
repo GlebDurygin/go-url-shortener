@@ -44,7 +44,7 @@ func parseFlags(args []string) (Config, error) {
 	flags := flag.NewFlagSet("shortener", flag.ContinueOnError)
 	flags.StringVar(&config.ServerAddress, "a", ":8080", "Server HTTP address")
 	flags.StringVar(&config.BaseURL, "b", "http://localhost:8080", "Base URL for shortened URLs")
-	flags.StringVar(&config.FileStoragePath, "f", "urls.json", "Path to JSON URL storage")
+	flags.StringVar(&config.FileStoragePath, "f", "", "Path to JSON URL storage")
 	flags.StringVar(&config.DatabaseDSN, "d", "", "PostgreSQL connection string")
 
 	err := flags.Parse(args)

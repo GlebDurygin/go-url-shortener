@@ -17,7 +17,10 @@ func TestParse(t *testing.T) {
 		args            []string
 		expected        Config
 	}{
-		{"defaults", "", "", "", "", nil, Config{":8080", "http://localhost:8080", "urls.json", ""}},
+		{"empty storage flags", "", "", "", "", []string{"-f=", "-d="}, Config{":8080", "http://localhost:8080", "", ""}},
+		{"file environment overrides flag", "", "", "env.json", "", []string{"-f=flag.json"}, Config{":8080", "http://localhost:8080", "env.json", ""}},
+		{"empty database flag with file environment", "", "", "env.json", "", []string{"-d="}, Config{":8080", "http://localhost:8080", "env.json", ""}},
+		{"defaults", "", "", "", "", nil, Config{":8080", "http://localhost:8080", "", ""}},
 		{
 			"serverAddress flag",
 			"",
@@ -25,7 +28,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-a=:8888"},
-			Config{":8888", "http://localhost:8080", "urls.json", ""},
+			Config{":8888", "http://localhost:8080", "", ""},
 		},
 		{
 			"baseURL flag",
@@ -34,7 +37,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-b=https://flag.example"},
-			Config{":8080", "https://flag.example", "urls.json", ""},
+			Config{":8080", "https://flag.example", "", ""},
 		},
 		{
 			"all flags",
@@ -43,7 +46,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-a", ":8888", "-b", "https://flag.example"},
-			Config{":8888", "https://flag.example", "urls.json", ""},
+			Config{":8888", "https://flag.example", "", ""},
 		},
 		{
 			"environment overrides flags",
@@ -52,7 +55,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-a=:8888", "-b=https://flag.example"},
-			Config{":9000", "https://yandex.practicum", "urls.json", ""},
+			Config{":9000", "https://yandex.practicum", "", ""},
 		},
 		{
 			"serverAddress environment with baseURL default",
@@ -61,7 +64,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			nil,
-			Config{":9000", "http://localhost:8080", "urls.json", ""},
+			Config{":9000", "http://localhost:8080", "", ""},
 		},
 		{
 			"baseURL environment with serverAddress default",
@@ -70,7 +73,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			nil,
-			Config{":8080", "https://yandex.practicum", "urls.json", ""},
+			Config{":8080", "https://yandex.practicum", "", ""},
 		},
 		{
 			"serverAddress environment overrides flag",
@@ -79,7 +82,7 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-a=:8888", "-b=https://flag.example"},
-			Config{":9000", "https://flag.example", "urls.json", ""},
+			Config{":9000", "https://flag.example", "", ""},
 		},
 		{
 			"baseURL environment overrides flag",
@@ -88,9 +91,9 @@ func TestParse(t *testing.T) {
 			"",
 			"",
 			[]string{"-a=:8888", "-b=https://flag.example"},
-			Config{":8888", "https://yandex.practicum", "urls.json", ""},
+			Config{":8888", "https://yandex.practicum", "", ""},
 		},
-		{"empty flags", "", "", "", "", []string{"-a=", "-b="}, Config{"", "", "urls.json", ""}},
+		{"empty flags", "", "", "", "", []string{"-a=", "-b="}, Config{"", "", "", ""}},
 		{
 			"environment with file flag",
 			":9000",
@@ -103,17 +106,17 @@ func TestParse(t *testing.T) {
 		{
 			"databaseDSN flag", "", "", "", "",
 			[]string{"-d", "host=localhost dbname=shortener"},
-			Config{":8080", "http://localhost:8080", "urls.json", "host=localhost dbname=shortener"},
+			Config{":8080", "http://localhost:8080", "", "host=localhost dbname=shortener"},
 		},
 		{
 			"databaseDSN environment", "", "", "", "host=database dbname=shortener",
 			nil,
-			Config{":8080", "http://localhost:8080", "urls.json", "host=database dbname=shortener"},
+			Config{":8080", "http://localhost:8080", "", "host=database dbname=shortener"},
 		},
 		{
 			"databaseDSN environment overrides flag", "", "", "", "host=database",
 			[]string{"-d", "host=localhost"},
-			Config{":8080", "http://localhost:8080", "urls.json", "host=database"},
+			Config{":8080", "http://localhost:8080", "", "host=database"},
 		},
 		{
 			"other environment values with databaseDSN flag", ":9000", "https://yandex.practicum", "urls.json", "",
