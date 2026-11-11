@@ -1,17 +1,20 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/shortener"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
 	"github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/file"
 	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/config"
@@ -40,11 +43,20 @@ func run() error {
 		return err
 	}
 
+	var database *sql.DB
+	if cfg.DatabaseDSN != "" {
+		database, err = sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			return fmt.Errorf("initialize database: invalid PostgreSQL connection configuration")
+		}
+		defer database.Close()
+	}
+
 	engine := gin.New()
 	engine.Use(logger.RequestLogger())
 	engine.Use(compress.Gzip())
 	shortenerHandler := shortener.NewShortener(cfg.BaseURL, urlStorage)
-	router.RegisterRoutes(engine, shortenerHandler)
+	router.RegisterRoutes(engine, shortenerHandler, healthcheck.NewHealthCheck(database))
 
 	err = http.ListenAndServe(cfg.ServerAddress, engine)
 	if err != nil {
