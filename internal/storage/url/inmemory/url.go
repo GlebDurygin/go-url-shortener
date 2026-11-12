@@ -35,3 +35,22 @@ func (m *URLInMemoryStorage) FindByID(id string) (string, bool) {
 	originalURL, ok := m.urls[id]
 	return originalURL, ok
 }
+
+func (m *URLInMemoryStorage) SaveAll(urls []string) ([]string, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	ids := make([]string, 0, len(urls))
+	for _, originalURL := range urls {
+		for {
+			id := rand.Text()[:8]
+			if _, exists := m.urls[id]; exists {
+				continue
+			}
+			m.urls[id] = originalURL
+			ids = append(ids, id)
+			break
+		}
+	}
+	return ids, nil
+}
