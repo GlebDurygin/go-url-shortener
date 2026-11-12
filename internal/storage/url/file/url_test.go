@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,4 +73,85 @@ func TestURLFileStorageInvalidFile(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, storage)
+}
+
+func TestURLFileStorageBatchSaveAndFindById(t *testing.T) {
+	tests := []struct {
+		name string
+		urls []string
+	}{
+		{"empty batch", nil},
+		{"single URL", []string{"https://practicum.yandex.ru/"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"duplicate URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "urls.json")
+			storage, err := NewURLFileStorage(path)
+			require.NoError(t, err)
+			existingID, err := storage.Save("https://existing.example")
+			require.NoError(t, err)
+
+			ids, err := storage.SaveAll(test.urls)
+
+			require.NoError(t, err)
+			require.Len(t, ids, len(test.urls))
+			storage, err = NewURLFileStorage(path)
+			require.NoError(t, err)
+			actual, ok := storage.FindByID(existingID)
+			require.True(t, ok)
+			assert.Equal(t, "https://existing.example", actual)
+			seen := make(map[string]bool)
+			for i, id := range ids {
+				assert.NotEmpty(t, id)
+				assert.False(t, seen[id])
+				seen[id] = true
+				actual, ok := storage.FindByID(id)
+				require.True(t, ok)
+				assert.Equal(t, test.urls[i], actual)
+			}
+		})
+	}
+}
+
+func TestURLFileStorageConcurrentSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "urls.json")
+	storage, err := NewURLFileStorage(path)
+	require.NoError(t, err)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Go(func() {
+			id, err := storage.Save("https://practicum.yandex.ru/")
+			assert.NoError(t, err)
+			actual, ok := storage.FindByID(id)
+			assert.True(t, ok)
+			assert.Equal(t, "https://practicum.yandex.ru/", actual)
+			ids, err := storage.SaveAll([]string{"https://example.org", "https://example.net"})
+			assert.NoError(t, err)
+			for i, id := range ids {
+				actual, ok := storage.FindByID(id)
+				assert.True(t, ok)
+				assert.Equal(t, []string{"https://example.org", "https://example.net"}[i], actual)
+			}
+		})
+	}
+	wg.Wait()
+	storage, err = NewURLFileStorage(path)
+	require.NoError(t, err)
+	assert.Len(t, storage.urls, 60)
+}
+
+func TestURLFileStorageSaveBatchError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "urls.json")
+	storage, err := NewURLFileStorage(path)
+	require.NoError(t, err)
+	require.NoError(t, os.Rename(path, path+".backup"))
+	require.NoError(t, os.Mkdir(path, 0700))
+
+	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "https://example.org"})
+
+	require.Error(t, err)
+	assert.Empty(t, ids)
+	assert.Empty(t, storage.urls)
 }

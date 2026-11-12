@@ -61,6 +61,40 @@ func (m *URLFileStorage) FindByID(id string) (string, bool) {
 	return originalURL, ok
 }
 
+func (m *URLFileStorage) SaveAll(urls []string) ([]string, error) {
+	ids := make([]string, 0, len(urls))
+	if len(urls) == 0 {
+		return ids, nil
+	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	records := make([]urlEntity, 0, len(urls))
+	pending := make(map[string]string, len(urls))
+	for _, originalURL := range urls {
+		for {
+			id := rand.Text()[:8]
+			if _, exists := m.urls[id]; exists {
+				continue
+			}
+			if _, exists := pending[id]; exists {
+				continue
+			}
+			pending[id] = originalURL
+			ids = append(ids, id)
+			records = append(records, urlEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
+			break
+		}
+	}
+	if err := m.persist(records); err != nil {
+		return nil, err
+	}
+	for id, originalURL := range pending {
+		m.urls[id] = originalURL
+	}
+	return ids, nil
+}
+
 func (m *URLFileStorage) persist(records []urlEntity) error {
 	f, err := os.OpenFile(m.filePath, os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {

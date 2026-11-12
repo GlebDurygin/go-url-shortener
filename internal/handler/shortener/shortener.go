@@ -54,13 +54,34 @@ func (s *Shortener) CreateShortenURLJson(c *gin.Context) {
 		return
 	}
 
-	response, err := easyjson.Marshal(dto.CreateURLResponse{Result: s.baseURL + "/" + id})
+	s.writeJSON(c, dto.CreateURLResponse{Result: s.baseURL + "/" + id})
+}
+
+func (s *Shortener) CreateShortenURLBatch(c *gin.Context) {
+	request, err := s.validateURLBatch(c)
+	if err != nil {
+		c.String(http.StatusBadRequest, "%s", err.Error())
+		return
+	}
+
+	urls := make([]string, len(request))
+	for i, item := range request {
+		urls[i] = item.OriginalURL
+	}
+	ids, err := s.repository.SaveAll(urls)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
 	}
 
-	c.Data(http.StatusCreated, "application/json", response)
+	response := make(dto.CreateURLBatchResponses, len(request))
+	for i, item := range request {
+		response[i] = dto.CreateURLBatchResponse{
+			CorrelationID: item.CorrelationID,
+			ShortURL:      s.baseURL + "/" + ids[i],
+		}
+	}
+	s.writeJSON(c, response)
 }
 
 func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
@@ -81,14 +102,9 @@ func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
 }
 
 func (s *Shortener) validateURL(c *gin.Context) (string, error) {
-	mediaType := c.GetHeader("Content-Type")
-	if mediaType != "text/plain" {
-		return "", errors.New("invalid Content-Type")
-	}
-
-	body, err := io.ReadAll(c.Request.Body)
+	body, err := s.readBody(c, "text/plain")
 	if err != nil {
-		return "", errors.New(err.Error())
+		return "", err
 	}
 
 	stringBody := strings.TrimSpace(string(body))
@@ -99,14 +115,9 @@ func (s *Shortener) validateURL(c *gin.Context) (string, error) {
 }
 
 func (s *Shortener) validateURLJson(c *gin.Context) (string, error) {
-	mediaType := c.GetHeader("Content-Type")
-	if mediaType != "application/json" {
-		return "", errors.New("invalid Content-Type")
-	}
-
-	body, err := io.ReadAll(c.Request.Body)
+	body, err := s.readBody(c, "application/json")
 	if err != nil {
-		return "", errors.New(err.Error())
+		return "", err
 	}
 
 	var request dto.CreateURLRequest
@@ -118,4 +129,41 @@ func (s *Shortener) validateURLJson(c *gin.Context) (string, error) {
 		return "", err
 	}
 	return request.URL, nil
+}
+
+func (s *Shortener) validateURLBatch(c *gin.Context) (dto.CreateURLBatchRequests, error) {
+	body, err := s.readBody(c, "application/json")
+	if err != nil {
+		return nil, err
+	}
+
+	var request dto.CreateURLBatchRequests
+	if err := easyjson.Unmarshal(body, &request); err != nil {
+		return nil, err
+	}
+
+	if len(request) == 0 {
+		return nil, errors.New("empty batch")
+	}
+
+	if err := binding.Validator.ValidateStruct(&request); err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func (s *Shortener) readBody(c *gin.Context, contentType string) ([]byte, error) {
+	if c.ContentType() != contentType {
+		return nil, errors.New("invalid Content-Type")
+	}
+	return io.ReadAll(c.Request.Body)
+}
+
+func (s *Shortener) writeJSON(c *gin.Context, response easyjson.Marshaler) {
+	body, err := easyjson.Marshal(response)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "%s", err.Error())
+		return
+	}
+	c.Data(http.StatusCreated, "application/json", body)
 }

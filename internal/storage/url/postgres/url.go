@@ -48,3 +48,42 @@ func (s *URLPostgresStorage) FindByID(id string) (string, bool) {
 	err := s.database.QueryRowContext(ctx, "SELECT original_url FROM urls WHERE short_url = $1", id).Scan(&originalURL)
 	return originalURL, err == nil
 }
+
+func (s *URLPostgresStorage) SaveAll(urls []string) ([]string, error) {
+	ids := make([]string, 0, len(urls))
+	if len(urls) == 0 {
+		return ids, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tx, err := s.database.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin URL batch: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, originalURL := range urls {
+		for {
+			id := rand.Text()[:8]
+			result, err := tx.ExecContext(ctx,
+				"INSERT INTO urls (short_url, original_url) VALUES ($1, $2) ON CONFLICT (short_url) DO NOTHING",
+				id, originalURL)
+			if err != nil {
+				return nil, fmt.Errorf("save URL batch: %w", err)
+			}
+			count, err := result.RowsAffected()
+			if err != nil {
+				return nil, fmt.Errorf("rows affected: %w", err)
+			}
+			if count == 1 {
+				ids = append(ids, id)
+				break
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit URL batch: %w", err)
+	}
+	return ids, nil
+}
