@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,8 +13,8 @@ import (
 
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
+	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
-
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +81,12 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 				compressedRequest: true,
 			},
 			expected: expected{statusCode: http.StatusCreated, body: `http://localhost:8080/known_id`},
+		},
+		{
+			name:          "existing URL",
+			requestParams: requestParams{contentType: "text/plain", body: `https://practicum.yandex.ru/`},
+			saveError:     fmt.Errorf("save: %w", repository.ErrConflict),
+			expected:      expected{statusCode: http.StatusConflict, body: `http://localhost:8080/known_id`},
 		},
 	}
 
@@ -242,6 +249,18 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 				body:       `{"result":"http://localhost:8080/known_id"}`,
 			},
 		},
+		{
+			name: "existing URL",
+			requestParams: requestParams{
+				contentType: "application/json",
+				body:        `{"url":"https://practicum.yandex.ru/"}`,
+			},
+			saveError: fmt.Errorf("save: %w", repository.ErrConflict),
+			expected: expected{
+				statusCode: http.StatusConflict,
+				body:       `{"result":"http://localhost:8080/known_id"}`,
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -303,7 +322,7 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 
 			resultBody, err := io.ReadAll(responseBody)
 			require.NoError(t, err)
-			if test.expected.statusCode == http.StatusCreated {
+			if test.expected.statusCode == http.StatusCreated || test.expected.statusCode == http.StatusConflict {
 				assert.Equal(t, "application/json", result.Header.Get("Content-Type"))
 				if test.requestParams.errorWriter {
 					assert.Empty(t, resultBody)

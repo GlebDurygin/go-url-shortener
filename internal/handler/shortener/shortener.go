@@ -33,7 +33,10 @@ func (s *Shortener) CreateShortenURL(c *gin.Context) {
 	}
 
 	id, err := s.repository.Save(body)
-	if err != nil {
+	if errors.Is(err, repository.ErrConflict) {
+		c.Data(http.StatusConflict, "text/plain", []byte(s.baseURL+"/"+id))
+		return
+	} else if err != nil {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
 	}
@@ -49,12 +52,15 @@ func (s *Shortener) CreateShortenURLJson(c *gin.Context) {
 	}
 
 	id, err := s.repository.Save(body)
-	if err != nil {
+	if errors.Is(err, repository.ErrConflict) {
+		s.writeJSON(c, http.StatusConflict, dto.CreateURLResponse{Result: s.baseURL + "/" + id})
+		return
+	} else if err != nil {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
 	}
 
-	s.writeJSON(c, dto.CreateURLResponse{Result: s.baseURL + "/" + id})
+	s.writeJSON(c, http.StatusCreated, dto.CreateURLResponse{Result: s.baseURL + "/" + id})
 }
 
 func (s *Shortener) CreateShortenURLBatch(c *gin.Context) {
@@ -81,7 +87,7 @@ func (s *Shortener) CreateShortenURLBatch(c *gin.Context) {
 			ShortURL:      s.baseURL + "/" + ids[i],
 		}
 	}
-	s.writeJSON(c, response)
+	s.writeJSON(c, http.StatusCreated, response)
 }
 
 func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
@@ -159,11 +165,11 @@ func (s *Shortener) readBody(c *gin.Context, contentType string) ([]byte, error)
 	return io.ReadAll(c.Request.Body)
 }
 
-func (s *Shortener) writeJSON(c *gin.Context, response easyjson.Marshaler) {
+func (s *Shortener) writeJSON(c *gin.Context, status int, response easyjson.Marshaler) {
 	body, err := easyjson.Marshal(response)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
 	}
-	c.Data(http.StatusCreated, "application/json", body)
+	c.Data(status, "application/json", body)
 }

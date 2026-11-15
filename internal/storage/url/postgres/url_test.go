@@ -1,5 +1,3 @@
-//go:build integration
-
 package postgres
 
 import (
@@ -8,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +28,23 @@ func TestPostgresStorageSaveAndFindById(t *testing.T) {
 	assert.Equal(t, url, actual)
 }
 
+func TestPostgresStorageSaveExistingURL(t *testing.T) {
+	db := setupTestDatabase(t)
+	storage := NewURLPostgresStorage(db)
+
+	url := "https://practicum.yandex.ru/"
+	existingID, err := storage.Save(url)
+	require.NoError(t, err)
+
+	id, err := storage.Save(url)
+	require.ErrorIs(t, err, repository.ErrConflict)
+	assert.Equal(t, existingID, id)
+
+	actual, ok := storage.FindByID(id)
+	require.True(t, ok)
+	assert.Equal(t, url, actual)
+}
+
 func TestPostgresStorageSaveBatch(t *testing.T) {
 	tests := []struct {
 		name string
@@ -36,7 +52,6 @@ func TestPostgresStorageSaveBatch(t *testing.T) {
 	}{
 		{"empty batch", nil},
 		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
-		{"duplicate URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/"}},
 	}
 	database := setupTestDatabase(t)
 	storage := NewURLPostgresStorage(database)
@@ -53,6 +68,21 @@ func TestPostgresStorageSaveBatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPostgresStorageSaveBatchExistingURL(t *testing.T) {
+	database := setupTestDatabase(t)
+	storage := NewURLPostgresStorage(database)
+
+	url := "https://practicum.yandex.ru/"
+	existingID, err := storage.Save(url)
+	require.NoError(t, err)
+
+	urls := []string{url}
+	ids, err := storage.SaveAll(urls)
+
+	require.ErrorIs(t, err, repository.ErrConflict)
+	require.Contains(t, ids, existingID)
 }
 
 func TestPostgresStorageSaveBatchRollback(t *testing.T) {

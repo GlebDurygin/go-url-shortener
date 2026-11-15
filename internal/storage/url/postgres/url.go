@@ -4,9 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
+
+	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 )
+
+type queryRowContext func(context.Context, string, ...any) *sql.Row
 
 type URLPostgresStorage struct {
 	database *sql.DB
@@ -19,25 +24,7 @@ func NewURLPostgresStorage(database *sql.DB) *URLPostgresStorage {
 func (s *URLPostgresStorage) Save(originalURL string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for {
-		id := rand.Text()[:8]
-		result, err := s.database.ExecContext(ctx,
-			"INSERT INTO urls (short_url, original_url) VALUES ($1, $2) ON CONFLICT (short_url) DO NOTHING",
-			id, originalURL)
-
-		if err != nil {
-			return "", fmt.Errorf("save URL: %w", err)
-		}
-
-		count, err := result.RowsAffected()
-		if err != nil {
-			return "", fmt.Errorf("rows affected: %w", err)
-		}
-
-		if count == 1 {
-			return id, nil
-		}
-	}
+	return s.saveURL(ctx, s.database.QueryRowContext, originalURL)
 }
 
 func (s *URLPostgresStorage) FindByID(id string) (string, bool) {
@@ -63,27 +50,43 @@ func (s *URLPostgresStorage) SaveAll(urls []string) ([]string, error) {
 	}
 	defer tx.Rollback()
 
+	var batchError error
 	for _, originalURL := range urls {
-		for {
-			id := rand.Text()[:8]
-			result, err := tx.ExecContext(ctx,
-				"INSERT INTO urls (short_url, original_url) VALUES ($1, $2) ON CONFLICT (short_url) DO NOTHING",
-				id, originalURL)
-			if err != nil {
+		id, err := s.saveURL(ctx, tx.QueryRowContext, originalURL)
+		if err != nil {
+			if errors.Is(err, repository.ErrConflict) {
+				batchError = errors.Join(batchError, err)
+			} else {
 				return nil, fmt.Errorf("save URL batch: %w", err)
 			}
-			count, err := result.RowsAffected()
-			if err != nil {
-				return nil, fmt.Errorf("rows affected: %w", err)
-			}
-			if count == 1 {
-				ids = append(ids, id)
-				break
-			}
 		}
+		ids = append(ids, id)
 	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit URL batch: %w", err)
 	}
-	return ids, nil
+
+	return ids, batchError
+}
+
+func (s *URLPostgresStorage) saveURL(ctx context.Context, queryRow queryRowContext, originalURL string) (string, error) {
+	var id string
+	var conflictedOriginalURL bool
+
+	err := queryRow(ctx, `
+		INSERT INTO urls (short_url, original_url)
+		VALUES ($1, $2)
+		ON CONFLICT (original_url)
+		DO UPDATE SET original_url = EXCLUDED.original_url
+		RETURNING short_url, OLD.short_url IS NOT NULL`,
+		rand.Text()[:8], originalURL).Scan(&id, &conflictedOriginalURL)
+	if err != nil {
+		return "", fmt.Errorf("save URL: %w", err)
+	}
+
+	if conflictedOriginalURL {
+		return id, repository.ErrConflict
+	}
+	return id, nil
 }
