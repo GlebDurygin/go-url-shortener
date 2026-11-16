@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -19,18 +18,13 @@ type Claims struct {
 func Authenticate(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cookie, err := c.Request.Cookie(CookieName)
-		if err != nil {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
+		if err == nil {
+			userID, valid := verify(cookie.Value, secret)
+			if valid && userID != "" {
+				c.Set(UserIDKey, userID)
+			}
 		}
 
-		userID, valid := verify(cookie.Value, secret)
-		if !valid || userID == "" {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-
-		c.Set(UserIDKey, userID)
 		c.Next()
 	}
 }
