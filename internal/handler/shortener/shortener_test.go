@@ -464,6 +464,17 @@ func TestShortenerCreateShortenURLBatch(t *testing.T) {
 			http.StatusCreated,
 			[]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"},
 		},
+		{
+			"batch with existing URL",
+			requestParams{
+				"application/json",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"},{"correlation_id":"second","original_url":"https://practicum.yandex.ru/go/"}]`,
+				false,
+			},
+			fmt.Errorf("save batch: %w", repository.ErrConflict),
+			http.StatusCreated,
+			[]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"},
+		},
 		{"empty batch", requestParams{"application/json", "[]", false}, nil, http.StatusBadRequest, nil},
 		{"null batch", requestParams{"application/json", "null", false}, nil, http.StatusBadRequest, nil},
 		{"invalid JSON", requestParams{"application/json", "[", false}, nil, http.StatusBadRequest, nil},

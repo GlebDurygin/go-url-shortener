@@ -92,7 +92,7 @@ func newDatabase(dsn string) (*sql.DB, error) {
 
 	database, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("invalid PostgreSQL connection url")
+		return nil, fmt.Errorf("open PostgreSQL database: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

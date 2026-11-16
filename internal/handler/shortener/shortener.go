@@ -76,7 +76,7 @@ func (s *Shortener) CreateShortenURLBatch(c *gin.Context) {
 		urls[i] = item.OriginalURL
 	}
 	ids, err := s.repository.SaveAll(urls, c.GetString(auth.UserIDKey))
-	if err != nil {
+	if err != nil && !errors.Is(err, repository.ErrConflict) {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
 	}

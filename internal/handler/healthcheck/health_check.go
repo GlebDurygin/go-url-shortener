@@ -19,7 +19,7 @@ func NewHealthCheck(database *sql.DB) *HealthCheck {
 
 func (h *HealthCheck) Ping(c *gin.Context) {
 	if h.database == nil {
-		c.Status(http.StatusInternalServerError)
+		c.Status(http.StatusOK)
 		return
 	}
 
