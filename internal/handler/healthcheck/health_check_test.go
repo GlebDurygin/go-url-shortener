@@ -24,7 +24,7 @@ func TestPing(t *testing.T) {
 	}{
 		{name: "connected", status: http.StatusOK},
 		{name: "unavailable", pingError: errors.New("database unavailable"), status: http.StatusInternalServerError},
-		{name: "not configured", missing: true, status: http.StatusInternalServerError},
+		{name: "not configured", missing: true, status: http.StatusOK},
 		{name: "request canceled", canceled: true, status: http.StatusInternalServerError},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

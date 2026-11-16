@@ -82,7 +82,7 @@ func TestURLFileStorageBatchSaveAndFindById(t *testing.T) {
 	}{
 		{"empty batch", nil},
 		{"single URL", []string{"https://practicum.yandex.ru/"}},
-		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}},
 		{"duplicate URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/"}},
 	}
 	for _, test := range tests {
@@ -127,12 +127,12 @@ func TestURLFileStorageConcurrentSave(t *testing.T) {
 			actual, ok := storage.FindByID(id)
 			assert.True(t, ok)
 			assert.Equal(t, "https://practicum.yandex.ru/", actual)
-			ids, err := storage.SaveAll([]string{"https://example.org", "https://example.net"})
+			ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/java/"})
 			assert.NoError(t, err)
 			for i, id := range ids {
 				actual, ok := storage.FindByID(id)
 				assert.True(t, ok)
-				assert.Equal(t, []string{"https://example.org", "https://example.net"}[i], actual)
+				assert.Equal(t, []string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/java/"}[i], actual)
 			}
 		})
 	}
@@ -149,7 +149,7 @@ func TestURLFileStorageSaveBatchError(t *testing.T) {
 	require.NoError(t, os.Rename(path, path+".backup"))
 	require.NoError(t, os.Mkdir(path, 0700))
 
-	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "https://example.org"})
+	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"})
 
 	require.Error(t, err)
 	assert.Empty(t, ids)

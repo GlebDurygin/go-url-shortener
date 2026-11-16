@@ -51,7 +51,7 @@ func TestPostgresStorageSaveBatch(t *testing.T) {
 		urls []string
 	}{
 		{"empty batch", nil},
-		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}},
 	}
 	database := setupTestDatabase(t)
 	storage := NewURLPostgresStorage(database)
