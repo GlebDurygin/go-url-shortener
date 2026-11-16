@@ -24,3 +24,11 @@ type CreateURLBatchRequests []CreateURLBatchRequest
 
 //easyjson:json
 type CreateURLBatchResponses []CreateURLBatchResponse
+
+type GetUserURLResponse struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
+//easyjson:json
+type GetUserURLsResponse []GetUserURLResponse

@@ -12,12 +12,15 @@ func TestURLInMemoryStorageSaveAndFindById(t *testing.T) {
 	storage := NewURLInMemoryStorage()
 	url := "https://practicum.yandex.ru/"
 
-	id, err := storage.Save(url)
+	id, err := storage.Save(url, "user")
 	require.NoError(t, err)
 	actual, ok := storage.FindByID(id)
 
 	require.True(t, ok)
 	assert.Equal(t, url, actual)
+	urls, err := storage.FindByUserID("user")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{id: url}, urls)
 }
 
 func TestURLInMemoryStorageFindById(t *testing.T) {
@@ -36,23 +39,23 @@ func TestURLInMemoryStorageBatchSaveAndFindById(t *testing.T) {
 	}{
 		{"empty batch", nil},
 		{"single URL", []string{"https://practicum.yandex.ru/"}},
-		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}},
 		{"duplicate URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			storage := NewURLInMemoryStorage()
-			existingID, err := storage.Save("https://existing.example")
+			existingID, err := storage.Save("https://practicum.yandex.ru/existing/", "user")
 			require.NoError(t, err)
 
-			ids, err := storage.SaveAll(test.urls)
+			ids, err := storage.SaveAll(test.urls, "user")
 
 			require.NoError(t, err)
 			require.Len(t, ids, len(test.urls))
 
 			actual, ok := storage.FindByID(existingID)
 			require.True(t, ok)
-			assert.Equal(t, "https://existing.example", actual)
+			assert.Equal(t, "https://practicum.yandex.ru/existing/", actual)
 			seen := make(map[string]bool)
 			for i, id := range ids {
 				assert.NotEmpty(t, id)
@@ -71,17 +74,17 @@ func TestURLInMemoryStorageConcurrentSave(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Go(func() {
-			id, err := storage.Save("https://practicum.yandex.ru/")
+			id, err := storage.Save("https://practicum.yandex.ru/", "user")
 			assert.NoError(t, err)
 			actual, ok := storage.FindByID(id)
 			assert.True(t, ok)
 			assert.Equal(t, "https://practicum.yandex.ru/", actual)
-			ids, err := storage.SaveAll([]string{"https://example.org", "https://example.net"})
+			ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/backend/"}, "user")
 			assert.NoError(t, err)
 			for i, id := range ids {
 				actual, ok := storage.FindByID(id)
 				assert.True(t, ok)
-				assert.Equal(t, []string{"https://example.org", "https://example.net"}[i], actual)
+				assert.Equal(t, []string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/backend/"}[i], actual)
 			}
 		})
 	}

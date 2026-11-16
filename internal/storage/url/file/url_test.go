@@ -17,12 +17,18 @@ func TestURLFileStorageSaveAndFindById(t *testing.T) {
 	require.FileExists(t, path)
 	url := "https://practicum.yandex.ru/"
 
-	id, err := storage.Save(url)
+	id, err := storage.Save(url, "user")
 	require.NoError(t, err)
 	actual, ok := storage.FindByID(id)
 
 	require.True(t, ok)
 	assert.Equal(t, url, actual)
+	storage, err = NewURLFileStorage(path)
+	require.NoError(t, err)
+
+	urls, err := storage.FindByUserID("user")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{id: url}, urls)
 }
 
 func TestURLFileStorageFindById(t *testing.T) {
@@ -58,7 +64,7 @@ func TestURLFileStorageSaveError(t *testing.T) {
 	require.NoError(t, os.Rename(path, path+".backup"))
 	require.NoError(t, os.Mkdir(path, 0700))
 
-	id, err := storage.Save("https://practicum.yandex.ru/")
+	id, err := storage.Save("https://practicum.yandex.ru/", "user")
 
 	require.Error(t, err)
 	assert.Empty(t, id)
@@ -82,7 +88,7 @@ func TestURLFileStorageBatchSaveAndFindById(t *testing.T) {
 	}{
 		{"empty batch", nil},
 		{"single URL", []string{"https://practicum.yandex.ru/"}},
-		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}},
 		{"duplicate URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/"}},
 	}
 	for _, test := range tests {
@@ -90,10 +96,10 @@ func TestURLFileStorageBatchSaveAndFindById(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "urls.json")
 			storage, err := NewURLFileStorage(path)
 			require.NoError(t, err)
-			existingID, err := storage.Save("https://existing.example")
+			existingID, err := storage.Save("https://practicum.yandex.ru/existing/", "user")
 			require.NoError(t, err)
 
-			ids, err := storage.SaveAll(test.urls)
+			ids, err := storage.SaveAll(test.urls, "user")
 
 			require.NoError(t, err)
 			require.Len(t, ids, len(test.urls))
@@ -101,7 +107,7 @@ func TestURLFileStorageBatchSaveAndFindById(t *testing.T) {
 			require.NoError(t, err)
 			actual, ok := storage.FindByID(existingID)
 			require.True(t, ok)
-			assert.Equal(t, "https://existing.example", actual)
+			assert.Equal(t, "https://practicum.yandex.ru/existing/", actual)
 			seen := make(map[string]bool)
 			for i, id := range ids {
 				assert.NotEmpty(t, id)
@@ -122,17 +128,17 @@ func TestURLFileStorageConcurrentSave(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Go(func() {
-			id, err := storage.Save("https://practicum.yandex.ru/")
+			id, err := storage.Save("https://practicum.yandex.ru/", "user")
 			assert.NoError(t, err)
 			actual, ok := storage.FindByID(id)
 			assert.True(t, ok)
 			assert.Equal(t, "https://practicum.yandex.ru/", actual)
-			ids, err := storage.SaveAll([]string{"https://example.org", "https://example.net"})
+			ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/backend/"}, "user")
 			assert.NoError(t, err)
 			for i, id := range ids {
 				actual, ok := storage.FindByID(id)
 				assert.True(t, ok)
-				assert.Equal(t, []string{"https://example.org", "https://example.net"}[i], actual)
+				assert.Equal(t, []string{"https://practicum.yandex.ru/go/", "https://practicum.yandex.ru/backend/"}[i], actual)
 			}
 		})
 	}
@@ -149,7 +155,7 @@ func TestURLFileStorageSaveBatchError(t *testing.T) {
 	require.NoError(t, os.Rename(path, path+".backup"))
 	require.NoError(t, os.Mkdir(path, 0700))
 
-	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "https://example.org"})
+	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}, "user")
 
 	require.Error(t, err)
 	assert.Empty(t, ids)

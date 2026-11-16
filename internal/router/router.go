@@ -11,6 +11,7 @@ type ShortenerHandler interface {
 	CreateShortenURLJson(*gin.Context)
 	RedirectToOriginalURL(*gin.Context)
 	CreateShortenURLBatch(*gin.Context)
+	GetUserURLs(*gin.Context)
 }
 
 type HealthCheckHandler interface {
@@ -21,6 +22,7 @@ func RegisterRoutes(engine *gin.Engine, shortenerHandler ShortenerHandler, healt
 	engine.POST("/", shortenerHandler.CreateShortenURL)
 	engine.POST("/api/shorten", shortenerHandler.CreateShortenURLJson)
 	engine.POST("/api/shorten/batch", shortenerHandler.CreateShortenURLBatch)
+	engine.GET("/api/user/urls", shortenerHandler.GetUserURLs)
 	engine.GET("/:id", shortenerHandler.RedirectToOriginalURL)
 
 	engine.GET("/ping", healthCheckHandler.Ping)

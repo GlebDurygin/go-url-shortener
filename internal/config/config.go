@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"flag"
 	"os"
 )
@@ -10,6 +11,7 @@ type Config struct {
 	BaseURL         string
 	FileStoragePath string
 	DatabaseDSN     string
+	AuthSecret      string
 }
 
 func Parse(args []string) (Config, error) {
@@ -24,6 +26,7 @@ func Parse(args []string) (Config, error) {
 	config.BaseURL = valueOrDefault(config.BaseURL, flagConfig.BaseURL)
 	config.FileStoragePath = valueOrDefault(config.FileStoragePath, flagConfig.FileStoragePath)
 	config.DatabaseDSN = valueOrDefault(config.DatabaseDSN, flagConfig.DatabaseDSN)
+	config.AuthSecret = valueOrDefault(config.AuthSecret, flagConfig.AuthSecret)
 
 	return config, nil
 }
@@ -34,6 +37,7 @@ func parseEnvs() Config {
 		BaseURL:         os.Getenv("BASE_URL"),
 		FileStoragePath: os.Getenv("FILE_STORAGE_PATH"),
 		DatabaseDSN:     os.Getenv("DATABASE_DSN"),
+		AuthSecret:      os.Getenv("AUTH_SECRET"),
 	}
 	return config
 }
@@ -46,6 +50,7 @@ func parseFlags(args []string) (Config, error) {
 	flags.StringVar(&config.BaseURL, "b", "http://localhost:8080", "Base URL for shortened URLs")
 	flags.StringVar(&config.FileStoragePath, "f", "", "Path to JSON URL storage")
 	flags.StringVar(&config.DatabaseDSN, "d", "", "PostgreSQL connection string")
+	flags.StringVar(&config.AuthSecret, "s", rand.Text(), "Authentication secret")
 
 	err := flags.Parse(args)
 	return config, err

@@ -20,12 +20,15 @@ func TestPostgresStorageSaveAndFindById(t *testing.T) {
 	storage := NewURLPostgresStorage(db)
 
 	url := "https://practicum.yandex.ru/"
-	id, err := storage.Save(url)
+	id, err := storage.Save(url, "user")
 	require.NoError(t, err)
 
 	actual, ok := storage.FindByID(id)
 	require.True(t, ok)
 	assert.Equal(t, url, actual)
+	urls, err := storage.FindByUserID("user")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{id: url}, urls)
 }
 
 func TestPostgresStorageSaveExistingURL(t *testing.T) {
@@ -33,10 +36,10 @@ func TestPostgresStorageSaveExistingURL(t *testing.T) {
 	storage := NewURLPostgresStorage(db)
 
 	url := "https://practicum.yandex.ru/"
-	existingID, err := storage.Save(url)
+	existingID, err := storage.Save(url, "user")
 	require.NoError(t, err)
 
-	id, err := storage.Save(url)
+	id, err := storage.Save(url, "user")
 	require.ErrorIs(t, err, repository.ErrConflict)
 	assert.Equal(t, existingID, id)
 
@@ -51,13 +54,13 @@ func TestPostgresStorageSaveBatch(t *testing.T) {
 		urls []string
 	}{
 		{"empty batch", nil},
-		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://example.org"}},
+		{"multiple URLs", []string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"}},
 	}
 	database := setupTestDatabase(t)
 	storage := NewURLPostgresStorage(database)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ids, err := storage.SaveAll(test.urls)
+			ids, err := storage.SaveAll(test.urls, "user")
 
 			require.NoError(t, err)
 			require.Len(t, ids, len(test.urls))
@@ -75,11 +78,11 @@ func TestPostgresStorageSaveBatchExistingURL(t *testing.T) {
 	storage := NewURLPostgresStorage(database)
 
 	url := "https://practicum.yandex.ru/"
-	existingID, err := storage.Save(url)
+	existingID, err := storage.Save(url, "user")
 	require.NoError(t, err)
 
 	urls := []string{url}
-	ids, err := storage.SaveAll(urls)
+	ids, err := storage.SaveAll(urls, "user")
 
 	require.ErrorIs(t, err, repository.ErrConflict)
 	require.Contains(t, ids, existingID)
@@ -89,7 +92,7 @@ func TestPostgresStorageSaveBatchRollback(t *testing.T) {
 	database := setupTestDatabase(t)
 	storage := NewURLPostgresStorage(database)
 
-	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "invalid\x00URL"})
+	ids, err := storage.SaveAll([]string{"https://practicum.yandex.ru/", "invalid\x00URL"}, "user")
 
 	require.Error(t, err)
 	assert.Empty(t, ids)

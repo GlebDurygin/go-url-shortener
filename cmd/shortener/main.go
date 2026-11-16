@@ -11,6 +11,7 @@ import (
 
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/shortener"
+	"github.com/GlebDurygin/go-url-shortener/internal/middleware/auth"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/logger"
 	"github.com/GlebDurygin/go-url-shortener/internal/repository/url"
@@ -58,6 +59,7 @@ func run() error {
 
 	engine := gin.New()
 	engine.Use(logger.RequestLogger())
+	engine.Use(auth.Authenticate(cfg.AuthSecret))
 	engine.Use(compress.Gzip())
 	shortenerHandler := shortener.NewShortener(cfg.BaseURL, urlStorage)
 	router.RegisterRoutes(engine, shortenerHandler, healthcheck.NewHealthCheck(database))
