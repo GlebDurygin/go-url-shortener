@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -23,6 +26,15 @@ func Authenticate(secret string) gin.HandlerFunc {
 			if valid && userID != "" {
 				c.Set(UserIDKey, userID)
 			}
+		} else if errors.Is(err, http.ErrNoCookie) {
+			userID := rand.Text()
+			token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{UserID: userID}).SignedString([]byte(secret))
+			if err != nil {
+				c.AbortWithStatus(http.StatusInternalServerError)
+				return
+			}
+			c.SetCookie(CookieName, token, 0, "/", "", false, true)
+			c.Set(UserIDKey, userID)
 		}
 
 		c.Next()

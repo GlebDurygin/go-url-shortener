@@ -588,7 +588,7 @@ func TestShortenerGetUserURLs(t *testing.T) {
 		},
 		{"no URLs", "other-user", "test-secret", http.StatusNoContent, ""},
 		{"missing user ID", "", "test-secret", http.StatusUnauthorized, ""},
-		{"missing cookie", "", "", http.StatusUnauthorized, ""},
+		{"missing cookie", "", "", http.StatusNoContent, ""},
 		{"invalid signature", "test-user", "wrong-secret", http.StatusUnauthorized, ""},
 	}
 	for _, test := range tests {
@@ -603,6 +603,11 @@ func TestShortenerGetUserURLs(t *testing.T) {
 			engine.ServeHTTP(response, request)
 
 			assert.Equal(t, test.status, response.Code)
+			if test.secret == "" {
+				require.Len(t, response.Result().Cookies(), 1)
+				assert.Equal(t, auth.CookieName, response.Result().Cookies()[0].Name)
+				assert.NotEmpty(t, response.Result().Cookies()[0].Value)
+			}
 			if test.body == "" {
 				assert.Empty(t, response.Body.String())
 			} else {
