@@ -12,9 +12,12 @@ import (
 	"testing"
 
 	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
+	"github.com/GlebDurygin/go-url-shortener/internal/middleware/auth"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
 	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
+	"github.com/GlebDurygin/go-url-shortener/internal/storage/url/inmemory"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -406,7 +409,7 @@ type stubURLRepository struct {
 	batch []string
 }
 
-func (s *stubURLRepository) Save(string) (string, error) {
+func (s *stubURLRepository) Save(string, string) (string, error) {
 	return "known_id", s.err
 }
 
@@ -417,7 +420,7 @@ func (s *stubURLRepository) FindByID(id string) (string, bool) {
 	return "", false
 }
 
-func (s *stubURLRepository) SaveAll(urls []string) ([]string, error) {
+func (s *stubURLRepository) SaveAll(urls []string, userID string) ([]string, error) {
 	s.batch = urls
 	ids := make([]string, len(urls))
 	for i := range urls {
@@ -551,6 +554,64 @@ func TestShortenerCreateShortenURLBatch(t *testing.T) {
 			if test.statusCode == http.StatusCreated {
 				assert.Contains(t, result.Header.Get("Content-Type"), "application/json")
 				assert.JSONEq(t, `[{"correlation_id":"first","short_url":"http://localhost:8080/known_id"},{"correlation_id":"second","short_url":"http://localhost:8080/known_id"}]`, string(body))
+			}
+		})
+	}
+}
+
+func (s *stubURLRepository) FindByUserID(userID string) (map[string]string, error) {
+	return nil, s.err
+}
+
+func TestShortenerGetUserURLs(t *testing.T) {
+	storage := inmemory.NewURLInMemoryStorage()
+	id, err := storage.Save("https://practicum.yandex.ru/", "test-user")
+	require.NoError(t, err)
+	handler := NewShortener("http://localhost:8080", storage)
+	engine := gin.New()
+	engine.Use(auth.Authenticate("test-secret"))
+	engine.GET("/api/user/urls", handler.GetUserURLs)
+
+	tests := []struct {
+		name   string
+		userID string
+		secret string
+		status int
+		body   string
+	}{
+		{
+			"owner",
+			"test-user",
+			"test-secret",
+			http.StatusOK,
+			`[{"short_url":"http://localhost:8080/` + id + `","original_url":"https://practicum.yandex.ru/"}]`,
+		},
+		{"no URLs", "other-user", "test-secret", http.StatusNoContent, ""},
+		{"missing user ID", "", "test-secret", http.StatusUnauthorized, ""},
+		{"missing cookie", "", "", http.StatusNoContent, ""},
+		{"invalid signature", "test-user", "wrong-secret", http.StatusUnauthorized, ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/user/urls", nil)
+			if test.secret != "" {
+				token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, auth.Claims{UserID: test.userID}).SignedString([]byte(test.secret))
+				require.NoError(t, err)
+				request.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+			}
+			response := httptest.NewRecorder()
+			engine.ServeHTTP(response, request)
+
+			assert.Equal(t, test.status, response.Code)
+			if test.secret == "" {
+				require.Len(t, response.Result().Cookies(), 1)
+				assert.Equal(t, auth.CookieName, response.Result().Cookies()[0].Name)
+				assert.NotEmpty(t, response.Result().Cookies()[0].Value)
+			}
+			if test.body == "" {
+				assert.Empty(t, response.Body.String())
+			} else {
+				assert.JSONEq(t, test.body, response.Body.String())
 			}
 		})
 	}

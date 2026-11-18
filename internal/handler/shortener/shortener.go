@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	dto "github.com/GlebDurygin/go-url-shortener/internal/dto/url"
+	"github.com/GlebDurygin/go-url-shortener/internal/middleware/auth"
 	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -32,7 +33,7 @@ func (s *Shortener) CreateShortenURL(c *gin.Context) {
 		return
 	}
 
-	id, err := s.repository.Save(body)
+	id, err := s.repository.Save(body, c.GetString(auth.UserIDKey))
 	if errors.Is(err, repository.ErrConflict) {
 		c.Data(http.StatusConflict, "text/plain", []byte(s.baseURL+"/"+id))
 		return
@@ -51,7 +52,7 @@ func (s *Shortener) CreateShortenURLJson(c *gin.Context) {
 		return
 	}
 
-	id, err := s.repository.Save(body)
+	id, err := s.repository.Save(body, c.GetString(auth.UserIDKey))
 	if errors.Is(err, repository.ErrConflict) {
 		s.writeJSON(c, http.StatusConflict, dto.CreateURLResponse{Result: s.baseURL + "/" + id})
 		return
@@ -74,7 +75,7 @@ func (s *Shortener) CreateShortenURLBatch(c *gin.Context) {
 	for i, item := range request {
 		urls[i] = item.OriginalURL
 	}
-	ids, err := s.repository.SaveAll(urls)
+	ids, err := s.repository.SaveAll(urls, c.GetString(auth.UserIDKey))
 	if err != nil && !errors.Is(err, repository.ErrConflict) {
 		c.String(http.StatusInternalServerError, "%s", err.Error())
 		return
@@ -105,6 +106,31 @@ func (s *Shortener) RedirectToOriginalURL(c *gin.Context) {
 
 	c.Header("Location", originalURL)
 	c.Status(http.StatusTemporaryRedirect)
+}
+
+func (s *Shortener) GetUserURLs(c *gin.Context) {
+	userID := c.GetString(auth.UserIDKey)
+	if userID == "" {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	urls, err := s.repository.FindByUserID(userID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "%s", err.Error())
+		return
+	}
+
+	if len(urls) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	response := make(dto.GetUserURLsResponse, 0, len(urls))
+	for id, originalURL := range urls {
+		response = append(response, dto.GetUserURLResponse{ShortURL: s.baseURL + "/" + id, OriginalURL: originalURL})
+	}
+	s.writeJSON(c, http.StatusOK, response)
 }
 
 func (s *Shortener) validateURL(c *gin.Context) (string, error) {

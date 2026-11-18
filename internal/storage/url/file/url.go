@@ -14,16 +14,18 @@ type URLFileStorage struct {
 	mutex    sync.RWMutex
 	filePath string
 	urls     map[string]string
+	users    map[string]string
 }
 
 type urlEntity struct {
 	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
+	UserID      string `json:"user_id,omitempty"`
 }
 
 func NewURLFileStorage(path string) (*URLFileStorage, error) {
-	m := &URLFileStorage{filePath: path, urls: make(map[string]string)}
+	m := &URLFileStorage{filePath: path, urls: make(map[string]string), users: make(map[string]string)}
 	entities, err := m.read()
 	if err != nil {
 		return nil, err
@@ -31,11 +33,12 @@ func NewURLFileStorage(path string) (*URLFileStorage, error) {
 
 	for _, entity := range entities {
 		m.urls[entity.ShortURL] = entity.OriginalURL
+		m.users[entity.ShortURL] = entity.UserID
 	}
 	return m, nil
 }
 
-func (m *URLFileStorage) Save(originalURL string) (string, error) {
+func (m *URLFileStorage) Save(originalURL, userID string) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -45,10 +48,18 @@ func (m *URLFileStorage) Save(originalURL string) (string, error) {
 			continue
 		}
 
-		if err := m.persist([]urlEntity{{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL}}); err != nil {
+		if err := m.persist([]urlEntity{
+			{
+				UserID:      userID,
+				UUID:        rand.Text(),
+				ShortURL:    id,
+				OriginalURL: originalURL,
+			},
+		}); err != nil {
 			return "", err
 		}
 		m.urls[id] = originalURL
+		m.users[id] = userID
 		return id, nil
 	}
 }
@@ -61,7 +72,7 @@ func (m *URLFileStorage) FindByID(id string) (string, bool) {
 	return originalURL, ok
 }
 
-func (m *URLFileStorage) SaveAll(urls []string) ([]string, error) {
+func (m *URLFileStorage) SaveAll(urls []string, userID string) ([]string, error) {
 	ids := make([]string, 0, len(urls))
 	if len(urls) == 0 {
 		return ids, nil
@@ -82,7 +93,12 @@ func (m *URLFileStorage) SaveAll(urls []string) ([]string, error) {
 			}
 			pending[id] = originalURL
 			ids = append(ids, id)
-			records = append(records, urlEntity{UUID: rand.Text(), ShortURL: id, OriginalURL: originalURL})
+			records = append(records, urlEntity{
+				UserID:      userID,
+				UUID:        rand.Text(),
+				ShortURL:    id,
+				OriginalURL: originalURL,
+			})
 			break
 		}
 	}
@@ -91,8 +107,22 @@ func (m *URLFileStorage) SaveAll(urls []string) ([]string, error) {
 	}
 	for id, originalURL := range pending {
 		m.urls[id] = originalURL
+		m.users[id] = userID
 	}
 	return ids, nil
+}
+
+func (m *URLFileStorage) FindByUserID(userID string) (map[string]string, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	urls := make(map[string]string)
+	for id, owner := range m.users {
+		if userID != "" && owner == userID {
+			urls[id] = m.urls[id]
+		}
+	}
+	return urls, nil
 }
 
 func (m *URLFileStorage) persist(records []urlEntity) error {
