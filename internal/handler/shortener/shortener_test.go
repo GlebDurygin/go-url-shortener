@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/GlebDurygin/go-url-shortener/internal/handler/healthcheck"
 	"github.com/GlebDurygin/go-url-shortener/internal/middleware/compress"
+	repository "github.com/GlebDurygin/go-url-shortener/internal/repository/url"
 	"github.com/GlebDurygin/go-url-shortener/internal/router"
-
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +82,12 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 			},
 			expected: expected{statusCode: http.StatusCreated, body: `http://localhost:8080/known_id`},
 		},
+		{
+			name:          "existing URL",
+			requestParams: requestParams{contentType: "text/plain", body: `https://practicum.yandex.ru/`},
+			saveError:     fmt.Errorf("save: %w", repository.ErrConflict),
+			expected:      expected{statusCode: http.StatusConflict, body: `http://localhost:8080/known_id`},
+		},
 	}
 
 	for _, test := range tests {
@@ -120,7 +128,7 @@ func TestShortenerCreateShortenURL(t *testing.T) {
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
-			router.RegisterRoutes(engine, s)
+			router.RegisterRoutes(engine, s, healthcheck.NewHealthCheck(nil))
 			engine.ServeHTTP(w, r)
 
 			result := recorder.Result()
@@ -241,6 +249,18 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 				body:       `{"result":"http://localhost:8080/known_id"}`,
 			},
 		},
+		{
+			name: "existing URL",
+			requestParams: requestParams{
+				contentType: "application/json",
+				body:        `{"url":"https://practicum.yandex.ru/"}`,
+			},
+			saveError: fmt.Errorf("save: %w", repository.ErrConflict),
+			expected: expected{
+				statusCode: http.StatusConflict,
+				body:       `{"result":"http://localhost:8080/known_id"}`,
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -281,7 +301,7 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 			s := NewShortener("http://localhost:8080", repository)
 			engine := gin.New()
 			engine.Use(compress.Gzip())
-			router.RegisterRoutes(engine, s)
+			router.RegisterRoutes(engine, s, healthcheck.NewHealthCheck(nil))
 			engine.ServeHTTP(w, r)
 
 			result := recorder.Result()
@@ -302,7 +322,7 @@ func TestShortenerCreateShortenURLJson(t *testing.T) {
 
 			resultBody, err := io.ReadAll(responseBody)
 			require.NoError(t, err)
-			if test.expected.statusCode == http.StatusCreated {
+			if test.expected.statusCode == http.StatusCreated || test.expected.statusCode == http.StatusConflict {
 				assert.Equal(t, "application/json", result.Header.Get("Content-Type"))
 				if test.requestParams.errorWriter {
 					assert.Empty(t, resultBody)
@@ -382,7 +402,8 @@ func (w *errorWriter) Write([]byte) (int, error) {
 }
 
 type stubURLRepository struct {
-	err error
+	err   error
+	batch []string
 }
 
 func (s *stubURLRepository) Save(string) (string, error) {
@@ -394,4 +415,143 @@ func (s *stubURLRepository) FindByID(id string) (string, bool) {
 		return "https://practicum.yandex.ru/", true
 	}
 	return "", false
+}
+
+func (s *stubURLRepository) SaveAll(urls []string) ([]string, error) {
+	s.batch = urls
+	ids := make([]string, len(urls))
+	for i := range urls {
+		ids[i] = "known_id"
+	}
+	return ids, s.err
+}
+
+func TestShortenerCreateShortenURLBatch(t *testing.T) {
+	type requestParams struct {
+		contentType string
+		body        string
+		compressed  bool
+	}
+	tests := []struct {
+		name          string
+		requestParams requestParams
+		saveError     error
+		statusCode    int
+		expectedURLs  []string
+	}{
+		{
+			"valid batch",
+			requestParams{
+				"application/json",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"},{"correlation_id":"second","original_url":"https://practicum.yandex.ru/go/"}]`,
+				false,
+			},
+			nil,
+			http.StatusCreated,
+			[]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"},
+		},
+		{
+			"gzip batch",
+			requestParams{
+				"application/json; charset=utf-8",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"},{"correlation_id":"second","original_url":"https://practicum.yandex.ru/go/"}]`,
+				true,
+			},
+			nil,
+			http.StatusCreated,
+			[]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"},
+		},
+		{
+			"batch with existing URL",
+			requestParams{
+				"application/json",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"},{"correlation_id":"second","original_url":"https://practicum.yandex.ru/go/"}]`,
+				false,
+			},
+			fmt.Errorf("save batch: %w", repository.ErrConflict),
+			http.StatusCreated,
+			[]string{"https://practicum.yandex.ru/", "https://practicum.yandex.ru/go/"},
+		},
+		{"empty batch", requestParams{"application/json", "[]", false}, nil, http.StatusBadRequest, nil},
+		{"null batch", requestParams{"application/json", "null", false}, nil, http.StatusBadRequest, nil},
+		{"invalid JSON", requestParams{"application/json", "[", false}, nil, http.StatusBadRequest, nil},
+		{"object instead of array", requestParams{"application/json", "{}", false}, nil, http.StatusBadRequest, nil},
+		{"trailing JSON", requestParams{"application/json", "[] []", false}, nil, http.StatusBadRequest, nil},
+		{"invalid content type", requestParams{"text/plain", "[]", false}, nil, http.StatusBadRequest, nil},
+		{
+			"missing correlation",
+			requestParams{"application/json", `[{"original_url":"https://practicum.yandex.ru/"}]`, false},
+			nil,
+			http.StatusBadRequest,
+			nil,
+		},
+		{
+			"invalid second URL",
+			requestParams{
+				"application/json",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"},{"correlation_id":"second","original_url":""}]`,
+				false,
+			},
+			nil,
+			http.StatusBadRequest,
+			nil,
+		},
+		{
+			"save error",
+			requestParams{
+				"application/json",
+				`[{"correlation_id":"first","original_url":"https://practicum.yandex.ru/"}]`,
+				false,
+			},
+			errors.New("save failed"),
+			http.StatusInternalServerError,
+			[]string{"https://practicum.yandex.ru/"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var reader io.Reader = strings.NewReader(test.requestParams.body)
+			if test.requestParams.compressed {
+				var compressed bytes.Buffer
+				writer := gzip.NewWriter(&compressed)
+				_, err := writer.Write([]byte(test.requestParams.body))
+				require.NoError(t, err)
+				require.NoError(t, writer.Close())
+				reader = &compressed
+			}
+			r := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", reader)
+			r.Header.Set("Content-Type", test.requestParams.contentType)
+			if test.requestParams.compressed {
+				r.Header.Set("Content-Encoding", "gzip")
+				r.Header.Set("Accept-Encoding", "gzip")
+			}
+			repository := &stubURLRepository{err: test.saveError}
+			engine := gin.New()
+			engine.Use(compress.Gzip())
+			router.RegisterRoutes(engine, NewShortener("http://localhost:8080", repository), healthcheck.NewHealthCheck(nil))
+			recorder := httptest.NewRecorder()
+
+			engine.ServeHTTP(recorder, r)
+
+			result := recorder.Result()
+			defer result.Body.Close()
+			assert.Equal(t, test.statusCode, result.StatusCode)
+			assert.Equal(t, test.expectedURLs, repository.batch)
+			var responseBody io.Reader = result.Body
+			if test.requestParams.compressed {
+				require.Equal(t, "gzip", result.Header.Get("Content-Encoding"))
+				reader, err := gzip.NewReader(result.Body)
+				require.NoError(t, err)
+				defer reader.Close()
+				responseBody = reader
+			}
+			body, err := io.ReadAll(responseBody)
+			require.NoError(t, err)
+			if test.statusCode == http.StatusCreated {
+				assert.Contains(t, result.Header.Get("Content-Type"), "application/json")
+				assert.JSONEq(t, `[{"correlation_id":"first","short_url":"http://localhost:8080/known_id"},{"correlation_id":"second","short_url":"http://localhost:8080/known_id"}]`, string(body))
+			}
+		})
+	}
 }
